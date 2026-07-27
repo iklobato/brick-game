@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <input id="name" maxlength="12" placeholder="seu nome">
+    <span>Massa <b id="mass">20</b></span>
+    <span>Lugar <b id="rank">1</b></span>
+    <span>Recorde <b id="best">20</b></span>
+    <button id="pause">Pausar</button>
+    <button id="restart">Reiniciar</button>
+  </header>
+  <canvas id="game"></canvas>
+  <p id="hint">WASD ou setas para andar. Coma as bolinhas e quem for menor que você. Espaço pausa.</p>
+  <div id="over" hidden>
+    <p>Você foi comido</p>
+    <ul id="stats"></ul>
+    <p class="small">Voltando pequeno...</p>
+  </div>
+</div>
+<details id="panel">
+  <summary>Ajustes</summary>
+  <div id="settings"></div>
+  <p class="note">Os ajustes só valem na próxima partida. Aperte Reiniciar.</p>
+  <p id="pending" hidden>Ajustes pendentes: aperte Reiniciar</p>
+  <button id="defaults">Voltar ao padrão</button>
+</details>
+<script src="game.js"></script>
+</body>
+</html>

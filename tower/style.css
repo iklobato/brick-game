@@ -1,0 +1,259 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 16px;
+  background: #12141c;
+  color: #e8ecf4;
+  font: 16px/1.4 system-ui, sans-serif;
+  user-select: none;
+}
+
+/* largura mandada pelo canvas: sem isso a loja estica o app e joga o painel
+   de ajustes para fora da tela */
+#app {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 4px 10px;
+}
+
+header b { color: #7ad3ff; }
+
+button {
+  padding: 6px 14px;
+  border: 1px solid #38405a;
+  border-radius: 6px;
+  background: #1c2030;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover { background: #262c40; }
+
+button:disabled { opacity: .4; cursor: default; }
+
+header #restart { margin-left: auto; }
+
+canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  background: #171a26;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.mesa { display: flex; gap: 14px; align-items: flex-start; }
+
+#mate {
+  width: 210px;
+  padding: 12px 14px;
+  border: 1px solid #262c40;
+  border-radius: 10px;
+  background: #171a26;
+  font-size: 14px;
+}
+
+#mate[hidden] { display: none; }
+
+#mate h2 { margin: 0 0 8px; font-size: 15px; color: #ffcf5c; }
+
+#mate p { margin: 4px 0; color: #9aa4bf; }
+
+#mate b { color: #e8ecf4; }
+
+.ficha {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #262c40;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  font-size: 12px;
+}
+
+.ficha dt { color: #7f88a3; }
+
+.ficha dd { margin: 0; color: #e8ecf4; overflow-wrap: anywhere; }
+
+.compartilhar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: #7f88a3;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#feed {
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid #262c40;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #9aa4bf;
+}
+
+#feed li.eu { color: #7ad3ff; }
+
+#feed li.ele { color: #ffcf5c; }
+
+.room { color: #7f88a3; font-size: 13px; }
+
+.room i { font-style: normal; color: #ffcf5c; }
+
+#shop {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+#shop button {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 4px;
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+#shop button small {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+#shop button small { color: #7f88a3; }
+
+#shop button.active {
+  border-color: #7ad3ff;
+  background: #1f2a3d;
+}
+
+#selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+#selection[hidden] { display: none; }
+
+#selection button { padding: 4px 10px; font-size: 13px; }
+
+#hint {
+  margin: 10px 4px 0;
+  color: #7f88a3;
+  font-size: 14px;
+}
+
+#over {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  background: #0d0f16e0;
+  font-size: 22px;
+}
+
+#over[hidden] { display: none; }
+
+#over:not([hidden]) { animation: fade-in .25s ease both; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+header b.bump {
+  display: inline-block;
+  animation: bump .3s ease;
+}
+
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+#panel {
+  width: 320px;
+  padding: 12px 14px;
+  border: 1px solid #262c40;
+  border-radius: 10px;
+  background: #171a26;
+}
+
+#panel summary { cursor: pointer; font-weight: 600; }
+
+#settings {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#settings label {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+  align-items: center;
+  column-gap: 8px;
+  font-size: 13px;
+  color: #b9c1d6;
+}
+
+#settings label span { grid-column: 1 / -1; }
+
+#settings input {
+  width: 100%;
+  accent-color: #7ad3ff;
+}
+
+#settings output {
+  text-align: right;
+  color: #7ad3ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 12px 0;
+  color: #7f88a3;
+  font-size: 12px;
+}
+
+#pending {
+  margin: 0 0 12px;
+  color: #ffcf5c;
+  font-size: 13px;
+}
+
+#pending[hidden] { display: none; }
+
+button.pending {
+  border-color: #ffcf5c;
+  color: #ffcf5c;
+}

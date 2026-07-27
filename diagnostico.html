@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnóstico</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <h1>Diagnóstico</h1>
+  <p class="sub">Abra esta página no navegador que você usa para jogar. Ela testa o que o jogo em dupla precisa.</p>
+  <ul class="lista" id="testes"></ul>
+  <p class="status" id="fim">testando...</p>
+</main>
+<script>
+const testes = document.getElementById('testes');
+
+function linha(nome) {
+  const li = document.createElement('li');
+  li.innerHTML = `<a><b>${nome}</b><small>testando…</small></a>`;
+  testes.append(li);
+  return (ok, detalhe) => {
+    li.querySelector('b').textContent = `${ok ? '✓' : '✗'} ${nome}`;
+    li.querySelector('small').textContent = detalhe;
+    li.querySelector('a').style.borderColor = ok ? '#2f5b3f' : '#5b2f39';
+  };
+}
+
+async function roda() {
+  const paginas = linha('Páginas do jogo');
+  const respostas = await Promise.all(['/', '/brick/', '/tower/', '/survivor/'].map(async (p) => {
+    try {
+      const r = await fetch(p, { method: 'HEAD' });
+      return `${p} ${r.status}`;
+    } catch (e) {
+      return `${p} falhou`;
+    }
+  }));
+  paginas(respostas.every((r) => r.includes('200')), respostas.join('  ·  '));
+
+  const socket = linha('WebSocket (o jogo em dupla)');
+  const protocolo = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const inicio = performance.now();
+  const resultado = await new Promise((resolve) => {
+    let ws;
+    const prazo = setTimeout(() => resolve({ ok: false, texto: 'não respondeu em 10 segundos' }), 10000);
+    try {
+      ws = new WebSocket(`${protocolo}//${location.host}`);
+    } catch (e) {
+      clearTimeout(prazo);
+      return resolve({ ok: false, texto: `não abriu: ${e.message}` });
+    }
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', game: 'diagnostico' }));
+    ws.onmessage = (e) => {
+      clearTimeout(prazo);
+      resolve({ ok: true, texto: `conectou em ${Math.round(performance.now() - inicio)} ms e o servidor respondeu: ${e.data}` });
+      ws.close();
+    };
+    ws.onerror = () => {
+      clearTimeout(prazo);
+      resolve({ ok: false, texto: 'o navegador recusou a conexão (veja o console com Cmd+Option+J)' });
+    };
+    ws.onclose = (e) => {
+      clearTimeout(prazo);
+      resolve({ ok: false, texto: `fechou antes de abrir (código ${e.code})` });
+    };
+  });
+  socket(resultado.ok, resultado.texto);
+
+  const navegador = linha('Seu navegador');
+  navegador(true, navigator.userAgent.slice(0, 90));
+
+  document.getElementById('fim').textContent = resultado.ok
+    ? 'tudo certo: o jogo em dupla funciona neste navegador'
+    : 'as páginas abrem, mas o modo dois jogadores não conecta neste navegador';
+  document.getElementById('fim').className = `status ${resultado.ok ? 'ok' : 'off'}`;
+}
+
+roda();
+</script>
+</body>
+</html>

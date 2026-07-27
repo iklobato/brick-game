@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jogos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Jogos</h1>
+  <p class="sub">Todos rodam no navegador, sem instalar nada. O de dois jogadores precisa deste servidor ligado.</p>
+
+  <ul class="lista">
+    <li>
+      <a href="/brick/">
+        <b>Bricks Master</b>
+        <small>Mire, atire e quebre os blocos antes que eles cheguem embaixo.</small>
+        <span class="tags"><i class="dupla">1 ou 2 jogadores</i><i id="sala-brick" class="vazio">ninguém jogando</i></span>
+      </a>
+    </li>
+    <li>
+      <a href="/tower/">
+        <b>Canyon Defense</b>
+        <small>Monte torres no desfiladeiro e segure as ondas de inimigos.</small>
+        <span class="tags"><i>1 jogador</i></span>
+      </a>
+    </li>
+    <li>
+      <a href="/survivor/">
+        <b>Agar</b>
+        <small>Coma as bolinhas, cresça e engula quem for menor que você.</small>
+        <span class="tags"><i>1 jogador</i></span>
+      </a>
+    </li>
+  </ul>
+
+  <h2>Para jogar em dois</h2>
+  <ol class="passos">
+    <li>Deixe o servidor rodando: <code>node server.js</code></li>
+    <li>Abra <b id="endereco">este endereço</b> nas duas máquinas (ou em duas janelas do navegador).</li>
+    <li>Entrem no <b>mesmo jogo</b>: quem chega primeiro vira o jogador 1.</li>
+  </ol>
+  <p id="status" class="status">procurando o servidor...</p>
+</main>
+<script src="/net.js"></script>
+<script src="menu.js"></script>
+</body>
+</html>

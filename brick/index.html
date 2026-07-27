@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bricks Master</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <span>Nível <b id="round">1</b></span>
+    <span>Recorde <b id="best">0</b></span>
+    <span>Rebatidas <b id="bounces">0</b></span>
+    <span>Visão de quebra <b id="breaks">0</b></span>
+    <span class="room">Sala: <i id="room">sozinho</i></span>
+    <button id="speed">2x</button>
+    <button id="restart">Reiniciar</button>
+  </header>
+  <div class="mesa">
+    <canvas id="game"></canvas>
+    <aside id="rival" hidden>
+      <h2>Adversário</h2>
+      <canvas id="rivalBoard"></canvas>
+      <p>Nível <b id="rivalRound">1</b></p>
+      <p>Bolas <b id="rivalBalls">1</b></p>
+      <p id="rivalState" class="vivo">jogando</p>
+      <dl id="rivalInfo" class="ficha"></dl>
+      <label class="compartilhar"><input type="checkbox" id="share" checked> mostrar meus dados</label>
+    </aside>
+  </div>
+  <div id="acoes">
+    <button id="repeat">Repetir tiro (espaço)</button>
+    <button id="clean">Recolher perdidas (R)</button>
+    <button id="bomb" hidden>Bomba (B)</button>
+  </div>
+  <p id="hint">Arraste o mouse para mirar e solte para atirar</p>
+  <div id="cartas" hidden>
+    <p>Escolha uma melhoria</p>
+    <div id="cartasLista"></div>
+  </div>
+  <div id="over" hidden>
+    <p id="overTitle">Fim de jogo</p>
+    <p class="grande">Nível <b id="finalRound">1</b></p>
+    <p id="quaseLa" class="quase"></p>
+    <ul id="resumo"></ul>
+    <p id="ganhou" class="moedas"></p>
+    <button id="again">Jogar de novo (Enter)</button>
+  </div>
+</div>
+<details id="loja" open>
+  <summary>Melhorias e metas</summary>
+  <p class="carteira">Moedas: <b id="moedas">0</b></p>
+  <div id="lojaLista"></div>
+  <h3>Metas</h3>
+  <ul id="metas"></ul>
+  <button id="diario">Desafio do dia</button>
+  <p id="diarioInfo" class="note"></p>
+</details>
+<details id="panel">
+  <summary>Ajustes</summary>
+  <div id="settings"></div>
+  <p class="note">Os ajustes só valem na próxima partida. Aperte Reiniciar.</p>
+  <p id="pending" hidden>Ajustes pendentes: aperte Reiniciar</p>
+  <button id="defaults">Voltar ao padrão</button>
+</details>
+<script src="/net.js"></script>
+<script src="/rival.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

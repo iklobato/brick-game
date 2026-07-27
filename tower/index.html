@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canyon Defense</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <span>Vidas <b id="lives">20</b></span>
+    <span>Seu dinheiro <b id="money">200</b></span>
+    <span id="mateBox" hidden>Parceiro <b id="mateMoney">200</b></span>
+    <span>Onda <b id="wave">0</b></span>
+    <span>Recorde <b id="best">0</b></span>
+    <span class="room">Sala: <i id="room">sozinho</i></span>
+    <button id="pause">Pausar</button>
+    <button id="speed">2x</button>
+    <button id="restart">Reiniciar</button>
+  </header>
+  <div class="mesa">
+    <canvas id="game"></canvas>
+    <aside id="mate" hidden>
+      <h2>Parceiro</h2>
+      <p>Dinheiro <b id="mateMoney2">200</b></p>
+      <p>Torres <b id="mateTowers">0</b></p>
+      <dl id="mateInfo" class="ficha"></dl>
+      <label class="compartilhar"><input type="checkbox" id="share" checked> mostrar meus dados</label>
+      <ul id="feed"></ul>
+    </aside>
+  </div>
+  <div id="shop"></div>
+  <div id="selection" hidden>
+    <span id="selName">Torre</span>
+    <button id="upgrade">Melhorar</button>
+    <button id="sell">Vender</button>
+  </div>
+  <p id="hint">Escolha uma torre e clique no terreno. Espaço pausa.</p>
+  <div id="over" hidden>
+    <p>Fim de jogo</p>
+    <p>Onda <b id="finalWave">0</b></p>
+    <button id="again">Jogar de novo</button>
+  </div>
+</div>
+<details id="panel">
+  <summary>Ajustes</summary>
+  <div id="settings"></div>
+  <p class="note">Os ajustes só valem na próxima partida. Aperte Reiniciar.</p>
+  <p id="pending" hidden>Ajustes pendentes: aperte Reiniciar</p>
+  <button id="defaults">Voltar ao padrão</button>
+</details>
+<script src="/net.js"></script>
+<script src="/rival.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
