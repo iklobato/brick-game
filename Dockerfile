@@ -5,9 +5,10 @@ FROM node:20-alpine
 WORKDIR /app
 COPY . .
 
-# Atras do tunel o servidor escuta so no loopback do droplet.
+# O Caddy do stack fleet chega no container pela rede do compose, nao pelo
+# loopback do droplet, entao o servidor escuta em todas as interfaces do
+# container. Nada disso fica publicado no host.
 ENV PORT=8090
-ENV HOST=127.0.0.1
 
 # Sobe como usuario comum: o processo nao precisa de root para nada.
 USER node
