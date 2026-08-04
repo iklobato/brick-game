@@ -17,6 +17,8 @@ const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  // sem o tipo certo o navegador recusa o svg e cai de volta no favicon.ico
+  '.svg': 'image/svg+xml',
 };
 
 // "/" e "/brick" e "/brick/" viram todos o index.html da pasta certa
