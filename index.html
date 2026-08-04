@@ -9,7 +9,7 @@
 <body>
 <main>
   <h1>Jogos</h1>
-  <p class="sub">Todos rodam no navegador, sem instalar nada. O de dois jogadores precisa deste servidor ligado.</p>
+  <p class="sub">Todos rodam no navegador, sem instalar nada.</p>
 
   <ul class="lista">
     <li>
@@ -35,13 +35,9 @@
     </li>
   </ul>
 
-  <h2>Para jogar em dois</h2>
-  <ol class="passos">
-    <li>Deixe o servidor rodando: <code>node server.js</code></li>
-    <li>Abra <b id="endereco">este endereço</b> nas duas máquinas (ou em duas janelas do navegador).</li>
-    <li>Entrem no <b>mesmo jogo</b>: quem chega primeiro vira o jogador 1.</li>
-  </ol>
-  <p id="status" class="status">procurando o servidor...</p>
+  <!-- So aparece quando o modo dois jogadores falha: no caminho normal a
+       pagina nao fala de servidor nenhum. -->
+  <p id="status" class="status off" hidden></p>
 </main>
 <script src="/net.js"></script>
 <script src="menu.js"></script>

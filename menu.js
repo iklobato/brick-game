@@ -1,6 +1,5 @@
 const ui = {
   status: document.getElementById('status'),
-  endereco: document.getElementById('endereco'),
   brick: document.getElementById('sala-brick'),
 };
 
@@ -10,8 +9,6 @@ const TEXTO_SALA = {
   2: ['sala cheia', 'cheio'],
 };
 
-ui.endereco.textContent = location.origin;
-
 function mostraSalas() {
   const quantos = Math.min(2, net.rooms.brick ?? 0);
   const [texto, classe] = TEXTO_SALA[quantos];
@@ -19,28 +16,24 @@ function mostraSalas() {
   ui.brick.className = classe;
 }
 
+// O servidor fica no ar o tempo todo, entao conectar e o esperado e nao merece
+// aviso nenhum: a linha so aparece quando o modo dois jogadores nao sobe, que e
+// a unica hora em que quem esta na pagina precisa saber de alguma coisa.
 function mostraStatus() {
-  if (net.socket && net.role !== 'solo') {
-    ui.status.textContent = 'conectado: dá para jogar em dois';
-    ui.status.className = 'status ok';
-    mostraSalas();
-    return;
-  }
   if (net.socket) {
-    ui.status.textContent = 'conectando...';
-    ui.status.className = 'status';
+    ui.status.hidden = true;
+    if (net.role !== 'solo') mostraSalas();
     return;
   }
   // sem socket: ou a pagina veio do disco, ou a conexao foi recusada
   if (!location.protocol.startsWith('http')) {
-    ui.status.textContent = 'aberto direto do arquivo: para jogar em dois abra pelo endereço do servidor';
-    ui.status.className = 'status off';
-    return;
+    ui.status.textContent = 'aberto direto do arquivo: para jogar em dois abra pelo endereço do site';
+  } else {
+    ui.status.innerHTML = net.erro === 'recusado'
+      ? 'o navegador recusou a conexão do modo dois jogadores. <a href="/diagnostico.html">abrir o diagnóstico</a>'
+      : `a conexão caiu: ${net.erro ?? 'sem resposta'}. <a href="/diagnostico.html">abrir o diagnóstico</a>`;
   }
-  ui.status.innerHTML = net.erro === 'recusado'
-    ? 'o navegador recusou a conexão do modo dois jogadores. <a href="/diagnostico.html">abrir o diagnóstico</a>'
-    : `a conexão caiu: ${net.erro ?? 'sem resposta'}. <a href="/diagnostico.html">abrir o diagnóstico</a>`;
-  ui.status.className = 'status off';
+  ui.status.hidden = false;
 }
 
 net.onLobby = mostraStatus;
