@@ -134,6 +134,16 @@ function limpaIp(bruto) {
   return String(bruto ?? '').replace(/^::ffff:/, '');
 }
 
+// Atras do Caddy quem abre a conexao e o proxy, entao socket.remoteAddress e o
+// container dele e todo adversario apareceria como vizinho de rede. O IP do
+// jogador so existe no X-Forwarded-For, e vale o ULTIMO da lista: o proxy anexa
+// o endereco real no fim, enquanto o que vem antes pode ter sido escrito pelo
+// proprio cliente. Sem proxy o header nao existe e o socket ja diz a verdade.
+function ipDoCliente(req, socket) {
+  const encaminhado = String(req.headers['x-forwarded-for'] ?? '').split(',').pop().trim();
+  return limpaIp(encaminhado || socket.remoteAddress);
+}
+
 function consultaIp(ip) {
   return new Promise((resolve) => {
     const req = https.get(`https://ipinfo.io/${ip}/json`, { timeout: IP_TIMEOUT }, (res) => {
@@ -232,8 +242,8 @@ async function trocaCartoes(sala) {
 
 const PING_INTERVAL = 25000;
 
-function entra(socket) {
-  const cliente = { socket, buffer: Buffer.alloc(0), parcial: null, jogo: null, role: null, ip: limpaIp(socket.remoteAddress), share: true };
+function entra(socket, ip) {
+  const cliente = { socket, buffer: Buffer.alloc(0), parcial: null, jogo: null, role: null, ip, share: true };
   // mantem viva a conexao ociosa: sem trafego, proxies fecham por conta propria
   const batida = setInterval(() => {
     if (socket.destroyed) return;
@@ -301,7 +311,7 @@ server.on('upgrade', (req, socket) => {
       `Sec-WebSocket-Accept: ${aceite}\r\n\r\n`,
   );
   socket.setNoDelay(true);
-  entra(socket);
+  entra(socket, ipDoCliente(req, socket));
 });
 
 server.listen(PORT, HOST, () => {

@@ -54,7 +54,9 @@ function leQuadros(estado, chunk, onTexto) {
   }
 }
 
-function conecta(nome, jogo) {
+// `extras` entra no handshake como veio: e assim que o teste finge ser o proxy
+// (ou um cliente tentando forjar o proprio endereco).
+function conecta(nome, jogo, extras = '') {
   return new Promise((resolve) => {
     const chave = crypto.randomBytes(16).toString('base64');
     const socket = net.connect(PORT, '127.0.0.1');
@@ -63,7 +65,7 @@ function conecta(nome, jogo) {
     socket.on('connect', () => {
       socket.write(
         `GET / HTTP/1.1\r\nHost: 127.0.0.1:${PORT}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
-          `Sec-WebSocket-Key: ${chave}\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+          `Sec-WebSocket-Key: ${chave}\r\nSec-WebSocket-Version: 13\r\n${extras}\r\n`,
       );
     });
     socket.on('data', (chunk) => {
@@ -141,6 +143,18 @@ async function main() {
   b.envia({ t: 'in', a: 'shoot' });
   await espera(150);
   checa(ultima(a, 'in')?.a === 'shoot', 'o comando do convidado chega no host');
+
+  // Atras do proxy o socket vem sempre do mesmo lugar, entao o cartao so diz a
+  // verdade se o servidor ler o X-Forwarded-For. O IP forjado pelo cliente vem
+  // primeiro na lista e o real por ultimo, que e o unico em que dá para confiar.
+  const proxyA = await conecta('proxyA', 'survivor', 'X-Forwarded-For: 8.8.8.8, 10.1.2.3\r\n');
+  const proxyB = await conecta('proxyB', 'survivor', 'X-Forwarded-For: 10.9.9.9\r\n');
+  await espera(300);
+  checa(ultima(proxyB, 'who')?.info?.ip === '10.1.2.3', 'atras do proxy vale o ultimo ip da lista, nao o que o cliente escreveu');
+  checa(ultima(proxyA, 'who')?.info?.ip === '10.9.9.9', 'o cartao traz o ip encaminhado do adversario');
+  proxyA.socket.destroy();
+  proxyB.socket.destroy();
+  await espera(150);
 
   const c = await conecta('C', 'brick');
   await espera(150);
