@@ -61,11 +61,17 @@ const draft = { ...config };
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// Quem esta na sala: o jogador 1 e o dono da partida, o 2 so manda a direcao.
+const euSou = () => (net.role === 'guest' ? 1 : 0);
+const souHost = () => net.role !== 'guest';
+const emDupla = () => net.peers > 1 && (net.role === 'host' || net.role === 'guest');
+
 const ui = {
   name: document.getElementById('name'),
   mass: document.getElementById('mass'),
   rank: document.getElementById('rank'),
   best: document.getElementById('best'),
+  room: document.getElementById('room'),
   stats: document.getElementById('stats'),
   over: document.getElementById('over'),
   pause: document.getElementById('pause'),
@@ -79,9 +85,9 @@ const game = {
   food: [],
   effects: [],
   player: null,
+  // As celulas de gente: uma sozinho, duas em dupla. game.player e a minha.
+  humans: [],
   frames: 0,
-  respawn: 0,
-  safe: 0,
   deaths: 0,
   bestMass: 0,
   zone: 0,
@@ -249,28 +255,44 @@ const SOUNDS = {
 
 // ------------------------------------------------------------ mundo
 
+// Comida que trocou de lugar desde o ultimo pacote. Mandar as 900 bolinhas em
+// cada quadro custaria 200 KB/s; mandar so as que mudaram custa alguns bytes,
+// porque no fim das contas o mapa quase nao muda entre um quadro e o seguinte.
+const comidaMudou = new Set();
+
 function placeFood(pellet) {
   pellet.x = random() * world;
   pellet.y = random() * world;
   pellet.shy = random() < SHY_CHANCE;
   pellet.color = pellet.shy ? '#ffe066' : `hsl(${randInt(360)} 70% 60%)`;
+  if (pellet.i !== undefined) comidaMudou.add(pellet.i);
   return pellet;
 }
 
-function makeCell(name, isPlayer) {
+// A cor separa os dois humanos na tela: azul e o jogador 1, amarelo o 2, do
+// mesmo jeito que as torres do Canyon Defense marcam o dono.
+const COR_HUMANA = ['#7ad3ff', '#ffcf5c'];
+
+function makeCell(name, isPlayer, quem = 0) {
   const jeitos = Object.keys(PERSONALITIES);
   return {
     name,
     isPlayer,
+    // qual humano e este: 0 ou 1 para gente, null para robo
+    quem: isPlayer ? quem : null,
     personality: isPlayer ? null : jeitos[randInt(jeitos.length)],
     x: random() * world,
     y: random() * world,
     mass: isPlayer ? config.startMass : pisoDeBot(),
     drawMass: config.startMass,
-    color: isPlayer ? '#7ad3ff' : `hsl(${randInt(360)} 65% 58%)`,
+    color: isPlayer ? COR_HUMANA[quem] : `hsl(${randInt(360)} 65% 58%)`,
     aimX: 0,
     aimY: 0,
     think: 0,
+    // cada um espera e fica intocavel por conta propria: em dupla, morrer nao
+    // pode congelar quem continua vivo
+    respawn: 0,
+    safe: 0,
   };
 }
 
@@ -304,7 +326,7 @@ function drainOutside() {
   for (const cell of game.cells) {
     if (!outsideZone(cell)) continue;
     cell.mass = Math.max(config.startMass * 0.5, cell.mass * (1 - ZONE_DRAIN));
-    if (!cell.isPlayer || game.frames % 30) continue;
+    if (cell !== game.player || game.frames % 30) continue;
     addEffect('text', 24, { x: cell.x, y: cell.y - 20, text: 'volte!', color: '#ff6b81' });
   }
 }
@@ -319,7 +341,7 @@ function eatFood(cell) {
     const dourada = pellet.shy;
     cell.mass += ganho;
     placeFood(pellet);
-    if (!cell.isPlayer) continue;
+    if (cell !== game.player) continue;
     game.stats.food++;
     addEffect('ring', 10, { x: pellet.x, y: pellet.y, r: 4, grow: 1.2, color: dourada ? '#ffe066' : pellet.color });
     if (dourada) SOUNDS.shy();
@@ -349,7 +371,7 @@ function moveShyFood() {
 // Come quem esta atras: precisa ser bem maior e cobrir o centro do outro.
 function canEat(eater, prey) {
   if (eater === prey) return false;
-  if (prey.isPlayer && game.safe > 0) return false; // acabou de renascer
+  if (prey.safe > 0) return false; // acabou de renascer
   if (eater.mass < prey.mass * EAT_RATIO) return false;
   return Math.hypot(eater.x - prey.x, eater.y - prey.y) < massToRadius(eater.mass) - massToRadius(prey.mass) * 0.4;
 }
@@ -361,10 +383,10 @@ function eatCells() {
       eater.mass += prey.mass;
       addEffect('ring', 18, { x: prey.x, y: prey.y, r: massToRadius(prey.mass), grow: 2, color: eater.color });
       if (prey.isPlayer) {
-        playerEaten(eater);
+        humanoComido(prey, eater);
         continue;
       }
-      if (eater.isPlayer) {
+      if (eater === game.player) {
         game.stats.cells++;
         SOUNDS.eat();
       }
@@ -374,15 +396,24 @@ function eatCells() {
   }
 }
 
-function playerEaten(eater) {
+// Morre um humano: a espera e a invencibilidade sao dele, mas a tela de "voce
+// foi comido" so aparece para quem morreu. Ver o parceiro sumir e voltar nao
+// pode tirar ninguem da partida.
+function humanoComido(prey, eater) {
+  prey.respawn = RESPAWN_FRAMES;
+  prey.safe = SAFE_FRAMES;
+  addEffect('text', 40, { x: prey.x, y: prey.y - 20, text: `comido por ${eater.name}`, color: '#ff6b81' });
+  respawnCell(prey);
+  if (prey !== game.player) {
+    // quem morreu foi o parceiro, e a maquina dele nao simula nada: sem este
+    // aviso ele veria a propria bola voltar pequena sem nenhuma explicacao
+    if (souHost() && emDupla()) netSend({ t: 'morte', por: eater.name });
+    return;
+  }
   game.deaths++;
   game.shake = 16;
-  game.respawn = RESPAWN_FRAMES;
-  game.safe = SAFE_FRAMES;
   SOUNDS.died();
-  addEffect('text', 40, { x: game.player.x, y: game.player.y - 20, text: `comido por ${eater.name}`, color: '#ff6b81' });
   showStats(eater);
-  respawnCell(game.player);
   ui.over.hidden = false;
   syncHud();
 }
@@ -416,17 +447,26 @@ function moveCell(cell, dirX, dirY) {
   clampToWorld(cell);
 }
 
-function movePlayer() {
-  if (game.respawn > 0) {
-    game.respawn--;
-    if (game.respawn === 0) ui.over.hidden = true;
-    return;
-  }
+// Para onde as teclas apontam agora. So quem esta na frente do teclado usa
+// isto: a direcao do parceiro chega pela rede e ja esta guardada na celula.
+function aimDoTeclado() {
   const up = keys.has('KeyW') || keys.has('ArrowUp');
   const down = keys.has('KeyS') || keys.has('ArrowDown');
   const left = keys.has('KeyA') || keys.has('ArrowLeft');
   const right = keys.has('KeyD') || keys.has('ArrowRight');
-  moveCell(game.player, (right ? 1 : 0) - (left ? 1 : 0), (down ? 1 : 0) - (up ? 1 : 0));
+  return [(right ? 1 : 0) - (left ? 1 : 0), (down ? 1 : 0) - (up ? 1 : 0)];
+}
+
+function movePlayer() {
+  for (const cell of game.humans) {
+    if (cell.respawn > 0) {
+      cell.respawn--;
+      if (cell.respawn === 0 && cell === game.player) ui.over.hidden = true;
+      continue;
+    }
+    if (cell === game.player) [cell.aimX, cell.aimY] = aimDoTeclado();
+    moveCell(cell, cell.aimX, cell.aimY);
+  }
 }
 
 // Robo simples: foge de quem pode come-lo, persegue quem ele pode comer e,
@@ -519,18 +559,25 @@ function reset() {
   world = config.worldSize;
 
   game.food = [];
-  for (let i = 0; i < config.foodCount; i++) game.food.push(placeFood({}));
+  // O indice e o nome da bolinha na rede: e por ele que o outro lado sabe qual
+  // sumiu. Fica gravado no proprio objeto porque procurar no array a cada
+  // mordida seria varrer 900 posicoes varias vezes por segundo.
+  for (let i = 0; i < config.foodCount; i++) game.food.push(Object.assign(placeFood({}), { i }));
+  comidaMudou.clear();
 
-  game.player = makeCell(playerName(), true);
-  game.cells = [game.player];
+  // Em dupla os dois humanos nascem sempre, nas duas maquinas, na mesma ordem:
+  // e o indice nesta lista que diz de quem e cada bola do outro lado.
+  const quantos = emDupla() ? 2 : 1;
+  game.humans = [];
+  for (let i = 0; i < quantos; i++) game.humans.push(makeCell(nomeDoJogador(i), true, i));
+  game.player = game.humans[emDupla() ? euSou() : 0];
+  game.cells = [...game.humans];
   for (let i = 0; i < config.botCount; i++) {
     game.cells.push(makeCell(NAMES[i % NAMES.length], false));
   }
 
   game.effects = [];
   game.frames = 0;
-  game.respawn = 0;
-  game.safe = 0;
   game.deaths = 0;
   game.bestMass = config.startMass;
   game.zone = 0;
@@ -560,19 +607,147 @@ function saveBest() {
 // Ajusta o mundo ao minuto atual: robos crescem, entram mais robos e a comida
 // vai sumindo aos poucos.
 function seguirCurva() {
-  if (game.safe > 0) game.safe--;
+  for (const cell of game.humans) if (cell.safe > 0) cell.safe--;
   const piso = pisoDeBot();
   for (const cell of game.cells) {
     if (cell.isPlayer || cell.mass >= piso) continue;
     cell.mass = Math.min(piso, cell.mass * 1.004);
   }
   const alvoBots = alvoDeRobos();
-  const robos = game.cells.length - 1;
+  const robos = game.cells.length - game.humans.length;
   if (robos < alvoBots) game.cells.push(makeCell(NAMES[robos % NAMES.length], false));
   const alvoComida = alvoDeComida();
   if (game.food.length > alvoComida) game.food.pop();
-  if (game.food.length < alvoComida) game.food.push(placeFood({}));
+  if (game.food.length < alvoComida) {
+    game.food.push(Object.assign(placeFood({}), { i: game.food.length }));
+    comidaMudou.add(game.food.length - 1);
+  }
 }
+
+// ------------------------------------------------------------ rede
+
+// O jogo roda inteiro na maquina do jogador 1 e vai de la para a tela do 2.
+// O jogador 2 manda so a direcao das teclas, e so quando ela muda: e a unica
+// coisa que a maquina dele sabe e a outra nao.
+const MATE_SEND = 3; // quadros entre um pacote e outro (20 por segundo)
+let nomeDoParceiro = '';
+let ultimoAim = '';
+let ultimoElenco = 0;
+
+function nomeDoJogador(quem) {
+  if (!emDupla()) return playerName();
+  if (quem === euSou()) return playerName();
+  return nomeDoParceiro || `Jogador ${quem + 1}`;
+}
+
+function estadoDaPartida() {
+  const pacote = {
+    t: 'st',
+    frames: game.frames,
+    cells: game.cells.map((c) => [
+      Math.round(c.x), Math.round(c.y), Math.round(c.mass * 10) / 10, c.respawn, c.safe,
+    ]),
+    // Nome e cor so mudam quando entra robo novo, entao o elenco vai junto
+    // apenas nessa hora em vez de repetir em todo pacote.
+    elenco: game.cells.length !== ultimoElenco ? game.cells.map((c) => [c.name, c.color, c.quem ?? -1]) : undefined,
+    comida: [...comidaMudou].map((i) => {
+      const p = game.food[i];
+      return p ? [i, Math.round(p.x), Math.round(p.y), p.shy ? 1 : 0, p.color] : null;
+    }).filter(Boolean),
+    total: game.food.length,
+  };
+  ultimoElenco = game.cells.length;
+  comidaMudou.clear();
+  return pacote;
+}
+
+function aplicaEstado(msg) {
+  game.frames = msg.frames;
+  if (msg.elenco) {
+    game.cells = msg.elenco.map(([name, color, quem], i) => ({
+      ...(game.cells[i] ?? {}),
+      name, color,
+      quem: quem < 0 ? null : quem,
+      isPlayer: quem >= 0,
+      drawMass: game.cells[i]?.drawMass ?? config.startMass,
+    }));
+    game.humans = game.cells.filter((c) => c.isPlayer).sort((a, b) => a.quem - b.quem);
+    game.player = game.humans[euSou()] ?? game.humans[0];
+  }
+  msg.cells.forEach(([x, y, mass, respawn, safe], i) => {
+    const cell = game.cells[i];
+    if (!cell) return;
+    cell.x = x;
+    cell.y = y;
+    cell.mass = mass;
+    cell.respawn = respawn;
+    cell.safe = safe;
+    cell.drawMass += (mass - cell.drawMass) * GROW_LERP;
+  });
+  game.food.length = msg.total;
+  for (const [i, x, y, shy, color] of msg.comida) {
+    game.food[i] = { i, x, y, shy: !!shy, color };
+  }
+  // sem isto a comida some da tela: a grade de busca aponta para os objetos
+  // antigos, que acabaram de ser trocados
+  rebuildFoodGrid();
+  // o aviso some quando a espera acaba: quem esconde no jogo de um so e o
+  // movePlayer, que aqui nao roda
+  if (game.player?.respawn === 0) ui.over.hidden = true;
+  syncHud();
+}
+
+function mandaAim() {
+  if (!emDupla() || souHost()) return;
+  const [x, y] = aimDoTeclado();
+  const agora = `${x},${y}`;
+  if (agora === ultimoAim) return;
+  ultimoAim = agora;
+  netSend({ t: 'aim', x, y });
+}
+
+net.onMessage = (msg) => {
+  if (msg.t === 'st' && !souHost()) aplicaEstado(msg);
+  if (msg.t === 'aim' && souHost() && game.humans[1]) {
+    game.humans[1].aimX = msg.x;
+    game.humans[1].aimY = msg.y;
+  }
+  if (msg.t === 'pause' && souHost()) togglePause();
+  if (msg.t === 'restart' && souHost()) pedeReinicio();
+  if (msg.t === 'morte' && !souHost()) {
+    game.deaths++;
+    game.shake = 16;
+    SOUNDS.died();
+    showStats({ name: msg.por });
+    ui.over.hidden = false;
+  }
+  if (msg.t === 'nome') {
+    nomeDoParceiro = String(msg.nome).slice(0, 12);
+    const dele = game.humans[1 - euSou()];
+    if (dele) dele.name = nomeDoParceiro;
+  }
+  if (msg.t === 'setup' && !souHost()) {
+    Object.assign(draft, msg.cfg);
+    for (const setting of SETTINGS) {
+      if (setting.input) setting.input.value = draft[setting.key];
+    }
+    reset();
+  }
+};
+
+net.onRole = () => {
+  ui.room.textContent = {
+    solo: 'sozinho',
+    host: net.peers > 1 ? 'em dupla (jogador 1)' : 'esperando o outro',
+    guest: 'em dupla (jogador 2)',
+    full: 'sala cheia',
+  }[net.role] ?? 'sozinho';
+  reset();
+  ultimoElenco = 0;
+  if (!emDupla()) return;
+  netSend({ t: 'nome', nome: playerName() });
+  if (souHost()) netSend({ t: 'setup', cfg: config });
+};
 
 function step() {
   seguirCurva();
@@ -693,7 +868,8 @@ function drawBoard() {
   ctx.fillStyle = '#e8ecf4';
   ctx.fillText('Maiores', W - 140, 18);
   linhas.forEach((cell, i) => {
-    ctx.fillStyle = cell.isPlayer ? '#7ad3ff' : '#9aa4bf';
+    // a cor da bola no placar: em dupla e o que diz qual das duas linhas e voce
+    ctx.fillStyle = cell.isPlayer ? cell.color : '#9aa4bf';
     ctx.fillText(`${i + 1}. ${cell.name} ${Math.round(cell.mass)}`, W - 140, 38 + i * 17);
   });
 }
@@ -743,7 +919,16 @@ function draw() {
 }
 
 function loop() {
-  if (!game.paused) step();
+  // Na maquina do jogador 2 o mundo nao anda sozinho: ele desenha o que chegou
+  // e devolve para onde esta indo. Simular dos dois lados so criaria duas
+  // partidas parecidas que discordam na primeira mordida.
+  if (souHost() || !emDupla()) {
+    if (!game.paused) step();
+    if (emDupla() && game.frames % MATE_SEND === 0) netSend(estadoDaPartida());
+  } else {
+    mandaAim();
+    updateEffects();
+  }
   draw();
   requestAnimationFrame(loop);
 }
@@ -773,11 +958,28 @@ ui.name.value = localStorage.getItem(NAME_KEY) || '';
 ui.name.addEventListener('input', () => {
   localStorage.setItem(NAME_KEY, ui.name.value);
   game.player.name = playerName();
+  if (emDupla()) netSend({ t: 'nome', nome: playerName() });
 });
 
+// Pausar e reiniciar valem a partida inteira, e a partida so existe de um lado.
+// Pedidos do jogador 2 viram mensagem em vez de mexerem na tela dele, que o
+// proximo pacote sobrescreveria de qualquer jeito.
 function togglePause() {
+  if (emDupla() && !souHost()) {
+    netSend({ t: 'pause' });
+    return;
+  }
   game.paused = !game.paused;
   ui.pause.textContent = game.paused ? 'Continuar' : 'Pausar';
+}
+
+function pedeReinicio() {
+  if (emDupla() && !souHost()) {
+    netSend({ t: 'restart' });
+    return;
+  }
+  reset();
+  if (emDupla()) netSend({ t: 'setup', cfg: config });
 }
 
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
@@ -798,7 +1000,7 @@ document.addEventListener('keyup', (event) => keys.delete(event.code));
 window.addEventListener('blur', () => keys.clear());
 
 ui.pause.addEventListener('click', togglePause);
-ui.restart.addEventListener('click', reset);
+ui.restart.addEventListener('click', pedeReinicio);
 
 // ------------------------------------------------------------ painel
 
@@ -878,19 +1080,20 @@ if (location.hash === '#test') {
   game.cells = [grande, pequeno];
   eatCells();
   console.assert(grande.mass === 120, 'quem come soma a massa do outro');
-  console.assert(pequeno.mass === config.startMass, 'quem foi comido volta pequeno');
+  // robo volta no piso do minuto atual, que no comeco e menor que a massa inicial
+  console.assert(pequeno.mass === pisoDeBot(), 'quem foi comido volta pequeno');
 
   console.assert(cellSpeed({ mass: 20 }) > cellSpeed({ mass: 2000 }), 'quanto maior, mais devagar');
 
   reset();
   const mortesAntes = game.deaths;
-  const gordo = { name: 'gordo', isPlayer: false, x: game.player.x, y: game.player.y, mass: 500, color: '#fff', aimX: 0, aimY: 0, think: 0 };
+  const gordo = { name: 'gordo', isPlayer: false, x: game.player.x, y: game.player.y, mass: 500, color: '#fff', aimX: 0, aimY: 0, think: 0, respawn: 0, safe: 0 };
   game.cells = [game.player, gordo];
   game.player.mass = 20;
   eatCells();
   console.assert(game.deaths === mortesAntes + 1, 'ser comido conta uma morte');
   console.assert(game.player.mass === config.startMass, 'voce renasce com a massa inicial');
-  console.assert(game.respawn > 0 && !ui.over.hidden, 'aparece o aviso e a espera para voltar');
+  console.assert(game.player.respawn > 0 && !ui.over.hidden, 'aparece o aviso e a espera para voltar');
   for (let i = 0; i < RESPAWN_FRAMES + 1; i++) movePlayer();
   console.assert(ui.over.hidden, 'passado o tempo o aviso some');
 
@@ -1019,6 +1222,61 @@ if (location.hash === '#test') {
   console.assert(retrato() !== partidaA, 'outra semente muda o mapa');
   restoreDefaults();
   console.assert(retrato() === partidaA, 'voltar a semente traz o mesmo mapa');
+
+  // ---- dois jogadores
+  // A partida inteira mora na maquina do jogador 1. O que se testa aqui e o
+  // que atravessa: o pacote que ele manda e a direcao que volta.
+  net.role = 'host';
+  net.peers = 2;
+  reset();
+  console.assert(game.humans.length === 2, 'em dupla nascem duas bolas de gente');
+  console.assert(game.humans[0].color !== game.humans[1].color, 'cada jogador tem a sua cor');
+  console.assert(game.player === game.humans[0], 'o jogador 1 controla a primeira');
+  console.assert(game.cells.length === config.botCount + 2, 'os dois entram no mesmo mundo dos robos');
+
+  ultimoElenco = 0;
+  game.humans[0].x = 111;
+  game.humans[0].y = 222;
+  game.humans[0].mass = 55;
+  const pacote = estadoDaPartida();
+  console.assert(pacote.cells.length === game.cells.length, 'o pacote leva todas as celulas');
+  console.assert(pacote.comida.length === 0, 'sem ninguem comendo, nenhuma bolinha viaja');
+  // 900 bolinhas em cada pacote dariam 200 KB/s; o teto aqui e o que sobra
+  // quando so as celulas viajam
+  console.assert(JSON.stringify(pacote).length < 3000, 'o pacote de estado continua pequeno');
+
+  placeFood(game.food[3]);
+  console.assert(estadoDaPartida().comida.some(([i]) => i === 3), 'a bolinha que mudou viaja no proximo pacote');
+  console.assert(estadoDaPartida().comida.length === 0, 'e viaja uma vez so');
+
+  // do outro lado: o jogador 2 monta o mesmo mapa pela semente e o pacote so
+  // corrige o que andou
+  net.role = 'guest';
+  reset();
+  console.assert(game.player === game.humans[1], 'no jogador 2 a bola controlada e a segunda');
+  aplicaEstado(pacote);
+  console.assert(Math.round(game.humans[0].x) === 111 && Math.round(game.humans[0].mass) === 55,
+    'a bola do jogador 1 chega na tela do jogador 2');
+  console.assert(game.food.length === pacote.total, 'os dois lados ficam com a mesma quantidade de comida');
+
+  const netSendReal = netSend;
+  const enviados = [];
+  netSend = (obj) => enviados.push(obj);
+  ultimoAim = '';
+  keys.clear();
+  keys.add('KeyD');
+  mandaAim();
+  mandaAim();
+  console.assert(enviados.length === 1 && enviados[0].x === 1, 'a direcao vai uma vez so enquanto a tecla nao muda');
+  keys.delete('KeyD');
+  keys.add('KeyA');
+  mandaAim();
+  console.assert(enviados.length === 2 && enviados.at(-1).x === -1, 'mudou a tecla, mudou a direcao que viaja');
+  netSend = netSendReal;
+  keys.clear();
+
+  net.role = 'solo';
+  net.peers = 1;
 
   // o teste engorda celulas de mentira: nao pode deixar isso virar recorde
   localStorage.removeItem(BEST_KEY);
