@@ -14,7 +14,7 @@ const TRAIL_LEN = 6;
 const RECALL_LERP = 0.22;
 const SLIDE_DECAY = 0.82;
 const SHAKE_DECAY = 0.86;
-const SEND_EVERY = 15; // quadros entre um resumo e outro (4 por segundo)
+const SEND_EVERY = 3; // quadros entre um pacote e outro (20 por segundo)
 const PLAYER_COLORS = ['#ffffff', '#ffb45c'];
 const HARD_GROWTH = 1.22;  // quanto a vida do bloco cresce por nivel depois do 15
 const CROWDED = 0.35;      // acima disso o tabuleiro conta como apertado
@@ -80,8 +80,6 @@ const ui = {
   room: document.getElementById('room'),
   overTitle: document.getElementById('overTitle'),
   rival: document.getElementById('rival'),
-  rivalBoard: document.getElementById('rivalBoard'),
-  rivalRound: document.getElementById('rivalRound'),
   rivalBalls: document.getElementById('rivalBalls'),
   rivalState: document.getElementById('rivalState'),
   rivalInfo: document.getElementById('rivalInfo'),
@@ -101,8 +99,6 @@ const ui = {
   diario: document.getElementById('diario'),
   diarioInfo: document.getElementById('diarioInfo'),
 };
-
-const rivalCtx = ui.rivalBoard.getContext('2d');
 
 const game = {
   blocks: [],
@@ -215,7 +211,11 @@ function random() {
 const randInt = (max) => Math.floor(random() * max);
 
 const isGuest = () => net.role === 'guest';
+const souHost = () => net.role !== 'guest';
+const euSou = () => (net.role === 'guest' ? 1 : 0);
 const localPlayer = () => game.players[game.local] ?? game.players[0];
+// o parceiro, quando tem um
+const outroPlayer = () => game.players.find((p) => p !== localPlayer());
 
 const PICKUP_KINDS = {
   ball: {
@@ -290,6 +290,10 @@ const EFFECTS = {
     },
   },
 };
+
+// A ordem aqui e o nome curto de cada item na rede: mexer nela muda o que o
+// outro lado desenha.
+const PICKUP_LIST = Object.keys(PICKUP_KINDS);
 
 function addEffect(kind, life, props) {
   if (game.effects.length >= MAX_EFFECTS) return;
@@ -557,9 +561,12 @@ function addRow() {
   spawnPickup('break', config.breakPickupChance, free);
 }
 
-function makePlayer() {
+function makePlayer(quem = 0) {
   return {
-    color: PLAYER_COLORS[0],
+    quem,
+    color: PLAYER_COLORS[quem],
+    // marcado quando a vez dele acaba: a linha so desce quando os dois marcam
+    pronto: false,
     launchX: W / 2,
     ballCount: config.startBalls,
     aimDepth: config.startAimDepth,
@@ -605,10 +612,12 @@ function reset() {
   game.round = 1;
   game.over = false;
   game.frames = 0;
-  game.players = [makePlayer()];
-  game.players[0].bombs = save.upgrades.bomb;
-  game.local = 0;
-  game.rival = null;
+  // Em dupla os dois atiram no mesmo tabuleiro: cada um tem as proprias bolas
+  // e a propria mira, e os blocos sao de todos.
+  game.players = emDupla() ? [makePlayer(0), makePlayer(1)] : [makePlayer(0)];
+  game.local = emDupla() ? euSou() : 0;
+  // as compras da lojinha sao de quem esta nesta maquina
+  game.players[game.local].bombs = save.upgrades.bomb;
   game.choosing = false;
   game.bombing = false;
   game.run = { blocks: 0, bestCombo: 0, bombs: 0, clears: 0, frames: 0 };
@@ -619,7 +628,6 @@ function reset() {
   ui.overTitle.textContent = 'Fim de jogo';
   ui.best.textContent = localStorage.getItem(BEST_KEY) || 0;
   syncHud();
-  syncRival();
   syncPending();
   syncLoja();
 }
@@ -632,6 +640,7 @@ function syncHud() {
   ui.bomb.hidden = !eu?.bombs;
   ui.bomb.textContent = `Bomba x${eu?.bombs ?? 0} (B)`;
   syncHint();
+  syncRival();
 }
 
 function syncHint() {
@@ -658,6 +667,12 @@ function syncPending() {
 }
 
 function shoot(player, dir) {
+  // Quem simula e o jogador 1. Na maquina do 2 o tiro vira mensagem: aplicar
+  // aqui tambem faria duas partidas parecidas que discordam no primeiro quique.
+  if (emDupla() && !souHost() && player === localPlayer()) {
+    netSend({ t: 'shoot', x: dir.x, y: dir.y });
+    return;
+  }
   player.aim = dir;
   player.lastAim = dir;
   if (player.doubleNext) {
@@ -674,6 +689,10 @@ function shoot(player, dir) {
 
 // Recolhe so quem esta rodando a toa ha um tempo, deixando quem ainda acerta.
 function recallLost(player) {
+  if (emDupla() && !souHost() && player === localPlayer()) {
+    netSend({ t: 'recallLost' });
+    return 0;
+  }
   const perdidas = player.balls.filter((ball) => player.turnFrames - ball.lastHit > LOST_AFTER);
   if (!perdidas.length) return 0;
   for (const ball of perdidas) {
@@ -689,6 +708,10 @@ function recallLost(player) {
 // Corta a vez no meio: para de lancar e as bolas na tela voltam voando.
 // A mira e zerada para o dedo que recolheu nao virar um tiro sem querer.
 function recallBalls(player) {
+  if (emDupla() && !souHost() && player === localPlayer()) {
+    netSend({ t: 'recall' });
+    return;
+  }
   player.queued = 0;
   player.recalling = true;
   player.aim = null;
@@ -726,11 +749,27 @@ function finishTurn(player) {
   player.nextLaunchX = null;
   player.ballCount += player.collected;
   player.collected = 0;
+  player.pronto = true;
   syncHint();
+  syncHud();
+  // O tabuleiro e um so: a linha nova desceria por cima das bolas de quem ainda
+  // esta atirando, entao a rodada so vira quando os dois terminam.
+  if (game.players.some((p) => !p.pronto)) return;
+  viraRodada();
+}
+
+function viraRodada() {
+  for (const p of game.players) p.pronto = false;
   game.round++;
-  if (game.round <= FREE_BALLS_UNTIL) player.ballCount++; // presente dos primeiros niveis
+  // presente dos primeiros niveis
+  if (game.round <= FREE_BALLS_UNTIL) for (const p of game.players) p.ballCount++;
   addRow();
-  if (game.round % CARD_EVERY === 0 && player === localPlayer()) abreCartas();
+  if (game.round % CARD_EVERY === 0) {
+    abreCartas();
+    // a virada de rodada acontece so aqui: sem o aviso, o jogador 2 nunca veria
+    // as cartas dele
+    if (emDupla() && souHost()) netSend({ t: 'cartas' });
+  }
   syncHud();
   const reachedBottom = (block) => block.row * config.cellSize + config.cellSize > deathY;
   if (game.blocks.some(reachedBottom)) gameOver();
@@ -748,7 +787,6 @@ function gameOver() {
   ui.overTitle.textContent = resultado();
   fechaConta(recordeAntigo);
   ui.over.hidden = false;
-  netSend({ t: 'lost', round: game.round });
 }
 
 // Fecha as contas da partida: moedas ganhas, metas, recorde e o quanto faltou.
@@ -794,13 +832,10 @@ function fechaConta(recordeAntigo) {
   syncLoja();
 }
 
-// Em dupla o placar e simples: quem chegou mais longe antes de perder.
+// O tabuleiro e um so: os dois chegam ao fim no mesmo nivel, entao nao ha
+// placar a fazer, so o quanto avancaram juntos.
 function resultado() {
-  if (!emDupla() || !game.rival) return 'Fim de jogo';
-  if (!game.rival.over) return 'Você perdeu primeiro';
-  if (game.round > game.rival.round) return 'Você ganhou';
-  if (game.round < game.rival.round) return 'Você perdeu';
-  return 'Empate';
+  return emDupla() ? `Fim de jogo: nivel ${game.round} a dois` : 'Fim de jogo';
 }
 
 // Um substep de movimento com os ricochetes: devolve o bloco atingido, ou null.
@@ -1207,15 +1242,27 @@ function pegaCarta(carta) {
   game.choosing = false;
   ui.cartas.hidden = true;
   ui.cartasLista.replaceChildren();
+  // A melhoria mexe no lancador, e o lancador de verdade vive na maquina do
+  // jogador 1: aplicada so aqui, o proximo pacote a apagaria.
+  if (emDupla() && !souHost()) {
+    netSend({ t: 'carta', i: CARTAS.indexOf(carta) });
+    return;
+  }
   carta.aplicar(localPlayer());
   syncHud();
 }
 
 // ---------------------------------------------------------------- bomba
 
-function usaBomba(col, row) {
-  const player = localPlayer();
+// `player` so e passado quando a bomba vem pela rede: e a do parceiro, e quem
+// paga por ela e o estoque dele, nao o de quem esta simulando.
+function usaBomba(col, row, player = localPlayer()) {
   if (!player?.bombs || game.over) return;
+  if (emDupla() && !souHost()) {
+    netSend({ t: 'bomba', col, row });
+    game.bombing = false;
+    return;
+  }
   player.bombs--;
   game.run.bombs++;
   SONS.bomba();
@@ -1236,36 +1283,66 @@ function usaBomba(col, row) {
 
 // ---------------------------------------------------------------- rede
 
-// Cada um simula o proprio tabuleiro: pela rede vai so um resumo, para o outro
-// desenhar a miniatura e comparar o nivel. Nenhum comando de controle trafega,
-// entao lag de rede nunca atrasa a sua mira.
-function resumo() {
-  const eu = localPlayer();
+// Um tabuleiro so, simulado na maquina do jogador 1. Da maquina do 2 sobem
+// apenas as decisoes dele (mira, recolher, bomba) e desce a cena inteira. As
+// bolas quicam rapido demais para os dois lados calcularem separado e
+// continuarem concordando.
+function estadoDaPartida() {
   return {
-    t: 'board',
+    t: 'st',
     round: game.round,
-    balls: eu.ballCount,
-    breaks: eu.breakDepth,
     over: game.over,
-    cols: config.cols,
-    rows: linhasJogaveis(),
-    blocks: game.blocks.map((b) => [b.col, b.row]),
+    slide: game.slide,
+    blocks: game.blocks.map((b) => [b.col, b.row, b.hp, b.flash]),
+    pickups: game.pickups.map((p) => [p.col, p.row, PICKUP_LIST.indexOf(p.kind)]),
+    players: game.players.map((p) => ({
+      n: p.ballCount,
+      b: p.bombs,
+      f: p.firing ? 1 : 0,
+      r: p.recalling ? 1 : 0,
+      d: p.pronto ? 1 : 0,
+      q: p.queued,
+      lx: Math.round(p.launchX),
+      ad: p.aimDepth,
+      bd: p.breakDepth,
+      sc: p.savedCards ?? 0,
+      // a bola inteira nao viaja: posicao e velocidade bastam para o outro lado
+      // desenhar, e o rastro ele mesmo refaz
+      bolas: p.balls.map((ball) => [Math.round(ball.x), Math.round(ball.y), Math.round(ball.vx), Math.round(ball.vy)]),
+    })),
   };
 }
 
-function aplicaRival(msg) {
-  game.rival = {
-    round: msg.round,
-    balls: msg.balls,
-    over: msg.over,
-    cols: msg.cols,
-    rows: msg.rows,
-    blocks: msg.blocks,
-  };
-  syncRival();
+function aplicaEstado(msg) {
+  game.round = msg.round;
+  game.over = msg.over;
+  game.slide = msg.slide;
+  game.blocks = msg.blocks.map(([col, row, hp, flash]) => ({ col, row, hp, flash }));
+  game.pickups = msg.pickups.map(([col, row, kind]) => ({ col, row, kind: PICKUP_LIST[kind] }));
+  msg.players.forEach((vindo, i) => {
+    const player = game.players[i];
+    if (!player) return;
+    player.ballCount = vindo.n;
+    player.bombs = vindo.b;
+    player.firing = !!vindo.f;
+    player.recalling = !!vindo.r;
+    player.pronto = !!vindo.d;
+    player.queued = vindo.q;
+    player.launchX = vindo.lx;
+    player.aimDepth = vindo.ad;
+    player.breakDepth = vindo.bd;
+    player.savedCards = vindo.sc;
+    player.balls = vindo.bolas.map(([x, y, vx, vy], j) => ({
+      x, y, vx, vy, r: config.ballRadius, lastHit: 0,
+      // o rastro fica na bola que ja estava aqui: refazer do zero a cada pacote
+      // apagaria o risco atras da bola 20 vezes por segundo
+      trail: player.balls[j]?.trail ?? [],
+    }));
+  });
+  syncHud();
 }
 
-// O jogador 1 manda a configuracao para os dois jogarem o mesmo mapa.
+// O jogador 1 manda a configuracao para os dois montarem o mesmo tabuleiro.
 function enviaSetup() {
   netSend({ t: 'setup', cfg: config });
 }
@@ -1281,14 +1358,21 @@ function aplicaSetup(msg) {
 
 net.onMessage = (msg) => {
   if (rivalHandles(msg)) return;
-  if (msg.t === 'board') aplicaRival(msg);
-  if (msg.t === 'lost' && game.rival) {
-    game.rival.over = true;
-    game.rival.round = msg.round;
-    syncRival();
-    if (game.over) ui.overTitle.textContent = resultado();
-  }
+  if (msg.t === 'st' && !souHost()) aplicaEstado(msg);
   if (msg.t === 'setup' && isGuest()) aplicaSetup(msg);
+  if (msg.t === 'cartas' && !souHost()) abreCartas();
+  if (!souHost()) return;
+  // daqui para baixo: o que o jogador 2 pediu e so o jogador 1 pode fazer
+  const dele = game.players[1];
+  if (!dele) return;
+  if (msg.t === 'shoot' && !dele.firing && !dele.pronto && !game.over) shoot(dele, { x: msg.x, y: msg.y });
+  if (msg.t === 'recall' && dele.firing) recallBalls(dele);
+  if (msg.t === 'recallLost' && dele.firing) recallLost(dele);
+  if (msg.t === 'bomba') usaBomba(msg.col, msg.row, dele);
+  if (msg.t === 'carta') {
+    CARTAS[msg.i]?.aplicar(dele);
+    syncHud();
+  }
 };
 
 rival.onChange = () => desenhaFicha(ui.rivalInfo);
@@ -1307,30 +1391,12 @@ net.onRole = () => {
 function syncRival() {
   const emJogo = emDupla() && net.peers > 1;
   ui.rival.hidden = !emJogo;
-  if (!emJogo || !game.rival) return;
-  ui.rivalRound.textContent = game.rival.round;
-  ui.rivalBalls.textContent = game.rival.balls;
-  ui.rivalState.textContent = game.rival.over ? 'perdeu' : 'jogando';
-  ui.rivalState.className = game.rival.over ? 'morto' : 'vivo';
+  const dele = outroPlayer();
+  if (!emJogo || !dele) return;
+  ui.rivalBalls.textContent = dele.ballCount;
+  ui.rivalState.textContent = dele.pronto ? 'esperando você' : (dele.firing ? 'atirando' : 'mirando');
+  ui.rivalState.className = dele.pronto ? 'morto' : 'vivo';
   desenhaFicha(ui.rivalInfo);
-  drawRival();
-}
-
-// Miniatura do tabuleiro do adversario: so os blocos, sem numero nem bola.
-function drawRival() {
-  const rival = game.rival;
-  const largura = ui.rivalBoard.clientWidth || 160;
-  const celula = largura / rival.cols;
-  ui.rivalBoard.width = largura;
-  ui.rivalBoard.height = celula * rival.rows;
-  rivalCtx.clearRect(0, 0, ui.rivalBoard.width, ui.rivalBoard.height);
-  rivalCtx.fillStyle = '#ffb45c';
-  for (const [col, row] of rival.blocks) {
-    if (row >= rival.rows) continue;
-    rivalCtx.fillRect(col * celula + 1, row * celula + 1, celula - 2, celula - 2);
-  }
-  rivalCtx.strokeStyle = '#2c3145';
-  rivalCtx.strokeRect(0.5, 0.5, ui.rivalBoard.width - 1, ui.rivalBoard.height - 1);
 }
 
 // ---------------------------------------------------------------- desenho
@@ -1569,13 +1635,32 @@ function draw() {
   ctx.restore();
 }
 
+// Entre um pacote e outro a bola segue reta na tela do jogador 2. Sem isso ela
+// andaria aos saltos, 20 posicoes por segundo em vez de 60. Quique, quebra e
+// tudo o que decide a partida continuam sendo do jogador 1: o proximo pacote
+// poe cada bola no lugar de verdade.
+function deslizaBolas() {
+  for (const player of game.players) {
+    for (const ball of player.balls) {
+      pushTrail(ball);
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+    }
+  }
+}
+
 function loop() {
   game.frames++;
-  for (let i = 0; i < game.speed; i++) update();
+  // Na maquina do jogador 2 nada se move por conta propria: bola quicando e
+  // rapido demais para dois calculos separados continuarem de acordo.
+  if (souHost() || !emDupla()) {
+    for (let i = 0; i < game.speed; i++) update();
+    if (emDupla() && net.peers > 1 && game.frames % SEND_EVERY === 0) netSend(estadoDaPartida());
+  } else {
+    deslizaBolas();
+  }
   updateEffects();
   draw();
-  // 4 pacotes por segundo bastam para a miniatura do adversario
-  if (emDupla() && net.peers > 1 && game.frames % SEND_EVERY === 0) netSend(resumo());
   requestAnimationFrame(loop);
 }
 
@@ -2010,45 +2095,72 @@ if (location.hash === '#test') {
   stepBall(eu2, tiroSeco, 1);
   console.assert(eu2.collected === 1, 'quebrar blocos rende bola nova, entao mirar bem paga');
 
-  // ------- em dupla: cada um no proprio tabuleiro
+  // ------- em dupla: um tabuleiro so, os dois atirando nele
   net.role = 'host';
   net.peers = 2;
   reset();
-  console.assert(game.players.length === 1, 'cada tela tem um lancador so, o seu');
-  const meuNivel = game.round;
+  console.assert(game.players.length === 2, 'em dupla ha dois lancadores no mesmo tabuleiro');
+  console.assert(game.local === 0, 'o jogador 1 controla o primeiro lancador');
+  console.assert(game.players[0].color !== game.players[1].color, 'cada um tem a sua cor');
+
+  // a linha so desce quando os dois acabam: senao ela cairia em cima das bolas
+  // de quem ainda esta atirando
+  const nivelEmDupla = game.round;
   shoot(game.players[0], clampAim(0, -1));
-  for (let i = 0; i < 400 && game.players[0].firing; i++) update();
-  console.assert(game.round === meuNivel + 1, 'a minha linha desce quando EU termino, sem esperar ninguem');
+  for (let i = 0; i < 600 && game.players[0].firing; i++) update();
+  console.assert(game.players[0].pronto, 'quem termina fica marcado como pronto');
+  console.assert(game.round === nivelEmDupla, 'terminando so um, o nivel espera');
+  shoot(game.players[1], clampAim(0, -1));
+  for (let i = 0; i < 600 && game.players[1].firing; i++) update();
+  console.assert(game.round === nivelEmDupla + 1, 'quando os dois acabam, a linha desce uma vez so');
+  console.assert(!game.players[0].pronto && !game.players[1].pronto, 'a rodada nova comeca com os dois livres');
 
-  const meuResumo = resumo();
-  console.assert(meuResumo.t === 'board', 'o que vai pela rede e so um resumo do tabuleiro');
-  console.assert(meuResumo.blocks.length === game.blocks.length, 'o resumo leva os blocos para a miniatura');
-  console.assert(meuResumo.blocks[0].length === 2, 'no resumo cada bloco e so coluna e linha');
-  console.assert(meuResumo.round === game.round && meuResumo.balls === game.players[0].ballCount, 'o resumo leva nivel e bolas');
+  const pacote = estadoDaPartida();
+  console.assert(pacote.t === 'st', 'o que viaja e a cena inteira, nao um resumo');
+  console.assert(pacote.players.length === 2, 'o pacote leva os dois lancadores');
+  console.assert(pacote.blocks.length === game.blocks.length, 'o pacote leva os blocos com vida e piscada');
+  console.assert(pacote.blocks[0].length === 4, 'cada bloco leva coluna, linha, vida e piscada');
 
-  const antesDoRival = { blocos: game.blocks.length, rodada: game.round };
-  aplicaRival({ round: 9, balls: 4, over: false, cols: 15, rows: 12, blocks: [[0, 0], [1, 1]] });
-  console.assert(game.rival.round === 9 && game.rival.balls === 4, 'o retrato do adversario chega');
-  console.assert(game.blocks.length === antesDoRival.blocos && game.round === antesDoRival.rodada, 'o jogo do outro nao mexe no meu tabuleiro');
-  console.assert(ui.rivalRound.textContent === '9', 'a tela do adversario mostra o nivel dele');
-  console.assert(!ui.rival.hidden, 'o quadro do adversario aparece em dupla');
+  // o outro lado monta a mesma cena a partir do pacote
+  shoot(game.players[1], clampAim(0.3, -1));
+  for (let i = 0; i < 20; i++) update();
+  const comBolas = estadoDaPartida();
+  console.assert(comBolas.players[1].bolas.length > 0, 'as bolas em voo viajam');
+  net.role = 'guest';
+  reset();
+  aplicaEstado(comBolas);
+  console.assert(game.round === comBolas.round, 'o nivel chega igual');
+  console.assert(game.blocks.length === comBolas.blocks.length, 'os blocos chegam todos');
+  console.assert(game.players[1].balls.length === comBolas.players[1].bolas.length, 'as bolas chegam todas');
+  const bolaRecebida = game.players[1].balls[0];
+  const antesDoDeslize = { x: bolaRecebida.x, y: bolaRecebida.y };
+  deslizaBolas();
+  console.assert(bolaRecebida.x !== antesDoDeslize.x || bolaRecebida.y !== antesDoDeslize.y,
+    'entre um pacote e outro a bola segue reta, senao andaria aos saltos');
 
-  game.round = 12;
-  game.rival.over = true;
-  game.rival.round = 8;
-  console.assert(resultado() === 'Você ganhou', 'quem foi mais longe ganha');
-  game.rival.round = 20;
-  console.assert(resultado() === 'Você perdeu', 'quem foi menos longe perde');
-  game.rival.round = 12;
-  console.assert(resultado() === 'Empate', 'mesmo nivel da empate');
-  game.rival.over = false;
-  console.assert(resultado() === 'Você perdeu primeiro', 'perder com o outro ainda vivo e derrota');
+  // na maquina do jogador 2 o tiro nao e aplicado: ele vira pedido
+  const netSendReal = netSend;
+  const enviados = [];
+  netSend = (obj) => enviados.push(obj);
+  game.players[1].firing = false;
+  game.players[1].balls = [];
+  shoot(game.players[1], clampAim(0, -1));
+  console.assert(!game.players[1].firing, 'o jogador 2 nao dispara sozinho');
+  console.assert(enviados.at(-1)?.t === 'shoot', 'o tiro dele vai como pedido para o jogador 1');
+  recallBalls(game.players[1]);
+  console.assert(enviados.at(-1)?.t === 'recall', 'recolher tambem e um pedido');
+  game.choosing = true;
+  const bolasAntesDaCarta = game.players[1].ballCount;
+  pegaCarta(CARTAS[0]);
+  console.assert(game.players[1].ballCount === bolasAntesDaCarta, 'a melhoria escolhida pelo jogador 2 nao se aplica na tela dele');
+  console.assert(enviados.at(-1)?.t === 'carta', 'ela vai como pedido, para valer no lancador de verdade');
+  netSend = netSendReal;
 
   net.role = 'solo';
   net.peers = 1;
   reset();
   console.assert(game.players.length === 1, 'sozinho segue igual');
-  console.assert(ui.rival.hidden, 'sem dupla o quadro do adversario some');
+  console.assert(ui.rival.hidden, 'sem dupla o quadro do parceiro some');
   // o teste mexeu em moedas e melhorias de mentira: nao pode ficar gravado
   localStorage.removeItem(SAVE_KEY);
   localStorage.removeItem(BEST_KEY);
