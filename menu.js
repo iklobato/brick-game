@@ -1,6 +1,8 @@
 const ui = {
   status: document.getElementById('status'),
-  brick: document.getElementById('sala-brick'),
+  // Um por jogo que aceita dupla: o data-sala diz de qual sala a tag fala, entao
+  // ligar um jogo novo na rede e so marcar a tag dele no html.
+  salas: document.querySelectorAll('[data-sala]'),
 };
 
 const TEXTO_SALA = {
@@ -10,10 +12,12 @@ const TEXTO_SALA = {
 };
 
 function mostraSalas() {
-  const quantos = Math.min(2, net.rooms.brick ?? 0);
-  const [texto, classe] = TEXTO_SALA[quantos];
-  ui.brick.textContent = texto;
-  ui.brick.className = classe;
+  for (const tag of ui.salas) {
+    const quantos = Math.min(2, net.rooms[tag.dataset.sala] ?? 0);
+    const [texto, classe] = TEXTO_SALA[quantos];
+    tag.textContent = texto;
+    tag.className = classe;
+  }
 }
 
 // O servidor fica no ar o tempo todo, entao conectar e o esperado e nao merece
@@ -22,7 +26,10 @@ function mostraSalas() {
 function mostraStatus() {
   if (net.socket) {
     ui.status.hidden = true;
-    if (net.role !== 'solo') mostraSalas();
+    // Quem esta no menu nunca pareia com ninguem, entao o papel aqui e sempre
+    // 'solo'. Esperar sair de solo para desenhar as salas era esperar por algo
+    // que nao acontece: o quadro de salas vem do lobby, nao do papel.
+    mostraSalas();
     return;
   }
   // sem socket: ou a pagina veio do disco, ou a conexao foi recusada
