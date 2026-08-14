@@ -12,6 +12,15 @@ export const SESSAO = {
   DESCANSO_MIN: 60,
 };
 
+// O jogo nao tem volume zero. Toda a mecanica e som: a palavra que nomeia o
+// objeto, a pergunta que diz o que fazer, o retorno de cada toque. Mudo nao e um
+// ajuste, e o jogo quebrado, e ja aconteceu de um aparelho ficar assim sem
+// ninguem entender por que. Quem quer silencio usa o volume do aparelho.
+export const VOLUME = {
+  PADRAO: 0.8,
+  MINIMO: 0.2,
+};
+
 const svg = (conteudo) =>
   `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">${conteudo}</svg>`;
 

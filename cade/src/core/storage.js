@@ -2,7 +2,7 @@
 // para o que e pesado, as fotos da casa e a voz gravada. Nada aqui sai do
 // aparelho, em nenhuma hipotese.
 import * as audio from './audio.js';
-import { OBJETOS, PALAVRAS, SESSAO } from '../config.js';
+import { OBJETOS, PALAVRAS, SESSAO, VOLUME } from '../config.js';
 
 const CHAVE_CONFIG = 'cade:config';
 
@@ -10,7 +10,7 @@ const PADRAO = {
   nome: '',
   duracaoMin: SESSAO.DURACAO_MIN,
   descansoMin: SESSAO.DESCANSO_MIN,
-  volume: 0.8,
+  volume: VOLUME.PADRAO,
   sessoes: 0,
 };
 
@@ -23,6 +23,15 @@ function leConfig() {
 }
 
 let atual = leConfig();
+
+// Conserta na abertura o aparelho que ficou mudo. Isto existe porque uma versao
+// antiga do self-check gravava volume zero e nao devolvia se a pagina fechasse
+// no meio: o jogo emudecia para sempre e nao havia como o pai adivinhar.
+const volumeGuardado = Number(atual.volume);
+atual.volume = Number.isFinite(volumeGuardado) ? Math.max(VOLUME.MINIMO, volumeGuardado) : VOLUME.PADRAO;
+if (atual.volume !== volumeGuardado) {
+  localStorage.setItem(CHAVE_CONFIG, JSON.stringify(atual));
+}
 
 export const config = {
   get: (chave) => atual[chave],

@@ -2,7 +2,7 @@
 // crianca. Tudo aqui e ajuste local: nada disso sai do aparelho.
 import * as storage from '../core/storage.js';
 import * as audio from '../core/audio.js';
-import { OBJETOS, PALAVRAS, perguntaDe, textoFalado } from '../config.js';
+import { OBJETOS, PALAVRAS, VOLUME, perguntaDe, textoFalado } from '../config.js';
 import { comecaGravacao, podeGravar } from './recorder.js';
 import { TRAVA_DO_APARELHO } from './suggestions.js';
 
@@ -31,23 +31,19 @@ function ajuste(chave, propriedades, aoMudar = () => {}) {
   return entrada;
 }
 
-// Volume com o numero na frente e um aviso quando esta zerado. Um controle
-// deslizante mudo parece um app quebrado: da para passar meia hora achando que o
-// som do jogo sumiu quando o que estava em zero era isto aqui.
+// O volume mostra o numero e toca um som enquanto voce arrasta, para dar para
+// ouvir na hora que esta funcionando. Nao desce ate zero de proposito: mudo nao
+// e ajuste, e o jogo quebrado. Para silencio, o volume do aparelho.
 function campoDeVolume() {
   const valor = cria('b', {});
-  const aviso = cria('span', { className: 'erro' });
-  const mostra = (nivel) => {
-    valor.textContent = `${Math.round(nivel * 100)}%`;
-    aviso.textContent = nivel > 0 ? '' : 'o jogo esta mudo';
-  };
-  const entrada = ajuste('volume', { type: 'range', min: 0, max: 1, step: 0.05 }, (nivel) => {
+  const mostra = (nivel) => { valor.textContent = `${Math.round(nivel * 100)}%`; };
+  const entrada = ajuste('volume', { type: 'range', min: VOLUME.MINIMO, max: 1, step: 0.05 }, (nivel) => {
     audio.defineVolume(nivel);
     mostra(nivel);
     audio.som('toque');
   });
   mostra(Number(storage.config.get('volume')));
-  return cria('div', { className: 'linha' }, [cria('span', { textContent: 'Volume' }), entrada, valor, aviso]);
+  return cria('div', { className: 'linha' }, [cria('span', { textContent: 'Volume' }), entrada, valor]);
 }
 
 function botaoDeOuvir(palavra) {
