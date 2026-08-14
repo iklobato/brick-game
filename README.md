@@ -70,10 +70,12 @@ do que a pesquisa diz que funciona nessa idade:
 Sao quatro atividades: **toca e acontece** (causa e efeito e vocabulario),
 **cade?** (permanencia de objeto), **musica** (imitacao e sequencia de dois
 passos) e **onde esta?**, a unica com resposta certa: a voz pergunta "onde esta a
-bola?" e ela aponta. A cada tres acertos entra mais uma escolha na tela, de uma
-ate seis. Mesmo ali nao existe errado: tocar no objeto trocado faz ele dizer o
-proprio nome, o certo balanca chamando e a pergunta se repete. Ninguem perde
-nada, nada trava, e nada apressa.
+bola?" e ela aponta. Comeca com duas escolhas, que e o minimo para a pergunta
+querer dizer alguma coisa, e a cada tres acertos entra mais uma, ate seis. A voz
+volta a perguntar enquanto ela nao age, porque a pergunta e a instrucao do jogo e
+ela nao sabe ler. Mesmo ali nao existe errado: tocar no objeto trocado faz ele
+dizer o proprio nome, o certo balanca chamando e a pergunta se repete. Ninguem
+perde nada, nada trava, e nada apressa.
 
 - **Um gesto so: tocar.** Nada de arrastar, pinca, girar ou segurar. O toque
   dispara no `pointerdown`, nunca no `click`, porque o dedo dela sai do alvo

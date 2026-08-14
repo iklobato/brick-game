@@ -3,19 +3,22 @@
 // faz ele dizer o proprio nome, que e informacao, nao castigo, e o certo balanca
 // chamando ate ela achar. Nada se perde, nada trava, ninguem apressa.
 //
-// A cada tres acertos entra mais uma escolha na tela, de uma ate seis. Comeca
-// com uma so de proposito: com um objeto so ela nao tem como errar e aprende a
-// regra do jogo pelo acerto, nao pela correcao.
+// Comeca com duas escolhas e a cada tres acertos entra mais uma, ate seis. Duas
+// e o minimo para a pergunta querer dizer alguma coisa: com um objeto so na tela
+// nao existe escolha nenhuma, e apontar o unico que esta ali nao ensina nada.
 import { aoTocar } from '../core/input.js';
 import * as audio from '../core/audio.js';
 import { OBJETOS, perguntaDe } from '../config.js';
 import { criaFigura, criaAgenda } from './figura.js';
 
 const ACERTOS_POR_NIVEL = 3;
+const ESCOLHAS_INICIAIS = 2;
 const MAXIMO_DE_ESCOLHAS = 6;
 const ESPERA_ATE_PERGUNTAR_MS = 600;
 const ESPERA_ATE_PROXIMA_MS = 2000;
 const ESPERA_ATE_REPETIR_MS = 1400;
+const ESPERA_ATE_REPETIR_A_PERGUNTA_MS = 6000;
+const REPETICOES_DA_PERGUNTA = 3;
 // Quando a voz e a do aparelho nao da para saber quanto ela dura, entao a
 // segunda palavra espera um tempo de palavra falada.
 const ESPERA_ENTRE_FALAS_MS = 900;
@@ -25,7 +28,8 @@ let palco = null;
 let contexto = null;
 let acertos = 0;
 
-const escolhasAgora = () => Math.min(MAXIMO_DE_ESCOLHAS, 1 + Math.floor(acertos / ACERTOS_POR_NIVEL));
+const escolhasAgora = () =>
+  Math.min(MAXIMO_DE_ESCOLHAS, ESCOLHAS_INICIAIS + Math.floor(acertos / ACERTOS_POR_NIVEL));
 
 // Quadrado o mais cheio possivel: seis viram duas fileiras de tres, quatro viram
 // duas de duas. Enfileirar seis objetos numa linha so os deixaria menores que o
@@ -84,9 +88,11 @@ function rodada() {
   });
 
   let respondida = false;
+  let ultimoToque = 0;
   for (const peca of pecas) {
     aoTocar(peca.botao, () => {
       audio.desbloqueia();
+      ultimoToque = Date.now();
       contexto.aoInteragir(peca.objeto.id);
       if (respondida) return;
       if (peca.objeto !== certo) {
@@ -98,9 +104,23 @@ function rodada() {
     });
   }
 
+  // A pergunta e a instrucao do jogo, e a crianca nao le: se ela olhar para o
+  // lado bem na hora, a rodada vira uma tela de figuras sem tarefa nenhuma. Por
+  // isso a voz volta a perguntar enquanto ela nao age, e cala a boca assim que
+  // ela encosta em alguma coisa, para nao falar por cima dela.
+  const pergunta = (repeticoes) => {
+    if (respondida) return;
+    audio.fala(perguntaDe(certo.id));
+    if (repeticoes <= 0) return;
+    agenda.depois(ESPERA_ATE_REPETIR_A_PERGUNTA_MS, () => {
+      if (respondida || Date.now() - ultimoToque < ESPERA_ATE_REPETIR_A_PERGUNTA_MS) return;
+      pergunta(repeticoes - 1);
+    });
+  };
+
   // A pergunta so entra depois de tudo na tela: perguntar antes de ela ver as
   // opcoes e perguntar no vazio.
-  agenda.depois(ESPERA_ATE_PERGUNTAR_MS, () => audio.fala(perguntaDe(certo.id)));
+  agenda.depois(ESPERA_ATE_PERGUNTAR_MS, () => pergunta(REPETICOES_DA_PERGUNTA));
 }
 
 export default {

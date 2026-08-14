@@ -6,7 +6,7 @@
 // armadilha: um tablet que ja instalou o jogo continuaria com a versao antiga
 // para sempre, porque nada aqui volta a perguntar nada para a rede. Trocar este
 // nome e o unico jeito de uma correcao chegar ate ele.
-const CACHE = 'cade-bd006d0e21400016';
+const CACHE = 'cade-a20ee7e4de729048';
 
 const ARQUIVOS = [
   './',

@@ -11,6 +11,7 @@ const AJUSTES_DO_TESTE = { duracaoMin: 0.05, descansoMin: 0, volume: 0 };
 const ALVO_MINIMO_PX = 96;
 const LATENCIA_MAXIMA_MS = 100;
 const ACERTOS_POR_NIVEL = 3;
+const ESCOLHAS_INICIAIS = 2;
 
 let falhas = 0;
 
@@ -141,18 +142,23 @@ async function roteiro() {
   storage.config.set('duracaoMin', 5);
   toca(document.querySelectorAll('.icone')[3]);
   await espera(900);
-  checa(document.querySelectorAll('.palco--onde .objeto').length === 1,
-        'A4 comeca com uma escolha so, onde nao existe como errar');
+  checa(document.querySelectorAll('.palco--onde .objeto').length === ESCOLHAS_INICIAIS,
+        `A4 comeca com ${ESCOLHAS_INICIAIS} escolhas, senao a pergunta nao pede escolha nenhuma`);
   confereLayout('A4');
 
+  // Toca em todas as escolhas da rodada: uma delas e a certa, e as outras so
+  // devolvem o proprio nome. Assim o teste acerta sem precisar espiar a resposta.
   for (let acerto = 1; acerto <= ACERTOS_POR_NIVEL; acerto++) {
-    const escolhido = document.querySelector('.palco--onde .objeto');
-    toca(escolhido);
-    checa(await esperaPor(() => !escolhido.isConnected), `acerto ${acerto} leva a proxima rodada sozinho`);
+    const escolhas = [...document.querySelectorAll('.palco--onde .objeto')];
+    for (const escolha of escolhas) {
+      toca(escolha);
+      await espera(120);
+    }
+    checa(await esperaPor(() => !escolhas[0].isConnected), `acerto ${acerto} leva a proxima rodada sozinho`);
   }
-  checa(document.querySelectorAll('.palco--onde .objeto').length === 2,
+  checa(document.querySelectorAll('.palco--onde .objeto').length === ESCOLHAS_INICIAIS + 1,
         `depois de ${ACERTOS_POR_NIVEL} acertos entra mais uma escolha na tela`);
-  confereLayout('A4 com duas escolhas');
+  confereLayout(`A4 com ${ESCOLHAS_INICIAIS + 1} escolhas`);
 
   await confereVoz();
 }

@@ -25,8 +25,16 @@ function garante() {
 // Navegador nenhum deixa tocar som antes de um gesto do usuario, entao isto
 // precisa rodar dentro do primeiro toque.
 export function desbloqueia() {
+  pronto();
+}
+
+// Todo som passa por aqui. Um contexto suspenso engole a fala sem erro nenhum, e
+// a crianca fica olhando uma pergunta que nunca chegou: pedir para acordar de
+// novo antes de tocar custa nada e cobre o toque que o navegador nao aceitou.
+function pronto() {
   garante();
   if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
 }
 
 export function defineVolume(valor) {
@@ -35,7 +43,7 @@ export function defineVolume(valor) {
 }
 
 function tom({ de, para = de, dur = 0.25, tipo = 'sine', pico = 0.4, atraso = 0, corte = 0 }) {
-  garante();
+  pronto();
   const inicio = ctx.currentTime + atraso;
   const osc = ctx.createOscillator();
   osc.type = tipo;
@@ -135,7 +143,7 @@ export function fala(palavra) {
 
   const buffer = gravadas.get(palavra) ?? padroes.get(palavra);
   if (buffer) {
-    garante();
+    pronto();
     const fonte = ctx.createBufferSource();
     fonte.buffer = buffer;
     fonte.connect(mestre);
