@@ -3,7 +3,7 @@
 // mesmo que ela vai fazer.
 import { aoTocar, comEspera } from '../core/input.js';
 import * as audio from '../core/audio.js';
-import { OBJETOS, TOQUE } from '../config.js';
+import { OBJETOS_BASE, TOQUE } from '../config.js';
 import { criaFigura, criaAgenda } from './figura.js';
 
 const agenda = criaAgenda();
@@ -11,12 +11,12 @@ const agenda = criaAgenda();
 export default {
   id: 'toca-e-acontece',
   icone: 'assets/img/icone-toca.jpg',
-  desenho: OBJETOS[0].desenho,
+  desenho: OBJETOS_BASE[0].desenho,
 
   mount(raiz, contexto) {
     raiz.classList.add('palco', 'palco--tres');
 
-    for (const objeto of OBJETOS) {
+    for (const objeto of OBJETOS_BASE) {
       const botao = document.createElement('button');
       botao.type = 'button';
       botao.className = 'alvo objeto';

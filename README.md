@@ -67,6 +67,14 @@ serve tudo do cache, da para conferir desligando o wi-fi). O publico e uma
 crianca de 24 a 36 meses **sempre junto de um adulto**, e o desenho inteiro sai
 do que a pesquisa diz que funciona nessa idade:
 
+Sao quatro atividades: **toca e acontece** (causa e efeito e vocabulario),
+**cade?** (permanencia de objeto), **musica** (imitacao e sequencia de dois
+passos) e **onde esta?**, a unica com resposta certa: a voz pergunta "onde esta a
+bola?" e ela aponta. A cada tres acertos entra mais uma escolha na tela, de uma
+ate seis. Mesmo ali nao existe errado: tocar no objeto trocado faz ele dizer o
+proprio nome, o certo balanca chamando e a pergunta se repete. Ninguem perde
+nada, nada trava, e nada apressa.
+
 - **Um gesto so: tocar.** Nada de arrastar, pinca, girar ou segurar. O toque
   dispara no `pointerdown`, nunca no `click`, porque o dedo dela sai do alvo
   antes de soltar.

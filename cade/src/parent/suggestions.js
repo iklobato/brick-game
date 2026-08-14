@@ -32,6 +32,20 @@ const BIBLIOTECA = {
       perguntas: ['Embaixo de qual copo esta?', 'Sumiu ou esta escondido?', 'Voce quer esconder para mim achar?'],
     },
   ],
+  'onde-esta': [
+    {
+      sugestao: 'Ponha tres brinquedos dele no chao, sente junto e peca um de cada vez: "me da a bola". Espere ele escolher sozinho, sem apontar.',
+      perguntas: ['Cade a bola?', 'E o sapato, onde esta?', 'O que e isso aqui?'],
+    },
+    {
+      sugestao: 'Na hora de vestir, espalhe as roupas e os sapatos e peca cada peca pelo nome antes de por.',
+      perguntas: ['Cade o sapato?', 'Esse e de qual pe?', 'Voce quer por sozinho?'],
+    },
+    {
+      sugestao: 'No banho, deixe o patinho, o copo e uma bola na agua e peca um por vez.',
+      perguntas: ['Onde esta o pato?', 'O pato boia ou afunda?', 'Voce quer encher o copo?'],
+    },
+  ],
   musica: [
     {
       sugestao: 'Peguem duas panelas e duas colheres de pau e batam juntos, primeiro devagar, depois rapido.',

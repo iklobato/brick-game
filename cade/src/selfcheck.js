@@ -10,6 +10,7 @@ const AJUSTES_DO_TESTE = { duracaoMin: 0.05, descansoMin: 0, volume: 0 };
 
 const ALVO_MINIMO_PX = 96;
 const LATENCIA_MAXIMA_MS = 100;
+const ACERTOS_POR_NIVEL = 3;
 
 let falhas = 0;
 
@@ -23,6 +24,18 @@ function checa(condicao, texto) {
 }
 
 const espera = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Esperar o estado, e nao um tanto fixo de tempo: o jogo tem tempos proprios e
+// dormir na conta errada acusa o app de quebrado quando quem chegou cedo foi o
+// teste.
+async function esperaPor(condicao, limiteMs = 6000) {
+  const fim = performance.now() + limiteMs;
+  while (performance.now() < fim) {
+    if (condicao()) return true;
+    await espera(80);
+  }
+  return false;
+}
 
 // dispatchEvent e sincrono, entao o que corre entre as duas medidas e o caminho
 // inteiro do toque: o listener, a decisao e o agendamento do som.
@@ -60,7 +73,7 @@ function confereLayout(onde) {
 
 async function roteiro() {
   const icones = document.querySelectorAll('.icone');
-  checa(icones.length === 3, 'a tela inicial tem os tres icones');
+  checa(icones.length === 4, 'a tela inicial tem os quatro icones');
   checa(document.querySelectorAll('.portao').length === 2, 'os dois cantos do modo pai estao instalados');
   checa(!document.getElementById('app').textContent.trim(), 'a tela da crianca nao tem texto nenhum');
   confereLayout('tela inicial');
@@ -86,7 +99,7 @@ async function roteiro() {
 
   cartao.querySelector('.botao').click();
   await espera(450); // deixa a animacao de entrada acabar antes de medir
-  checa(document.querySelectorAll('.icone').length === 3, 'fechar o cartao volta para os tres icones');
+  checa(document.querySelectorAll('.icone').length === icones.length, 'fechar o cartao volta para a tela inicial');
 
   // A2
   toca(document.querySelectorAll('.icone')[1]);
@@ -121,6 +134,25 @@ async function roteiro() {
   await espera(3400);
   checa(!!document.querySelector('.painel'), 'os dois cantos por tres segundos abrem o modo pai');
   document.querySelector('.painel .botao--principal').click();
+  await espera(450); // deixa a animacao de entrada acabar antes de medir
+
+  // A4. A sessao do teste dura tres segundos e cortaria as rodadas no meio, entao
+  // aqui ela volta a ter tamanho de gente.
+  storage.config.set('duracaoMin', 5);
+  toca(document.querySelectorAll('.icone')[3]);
+  await espera(900);
+  checa(document.querySelectorAll('.palco--onde .objeto').length === 1,
+        'A4 comeca com uma escolha so, onde nao existe como errar');
+  confereLayout('A4');
+
+  for (let acerto = 1; acerto <= ACERTOS_POR_NIVEL; acerto++) {
+    const escolhido = document.querySelector('.palco--onde .objeto');
+    toca(escolhido);
+    checa(await esperaPor(() => !escolhido.isConnected), `acerto ${acerto} leva a proxima rodada sozinho`);
+  }
+  checa(document.querySelectorAll('.palco--onde .objeto').length === 2,
+        `depois de ${ACERTOS_POR_NIVEL} acertos entra mais uma escolha na tela`);
+  confereLayout('A4 com duas escolhas');
 }
 
 export async function roda() {

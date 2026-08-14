@@ -36,9 +36,13 @@ const IMAGENS = [
   ['bola', `A single child's play ball, bright red rubber with one simple white stripe, ${FUNDO}`],
   ['copo', `A single toddler drinking cup made of teal plastic with two handles, ${FUNDO}`],
   ['cao', `A single soft plush toy dog, brown and cream, sitting and facing the camera with a friendly face, ${FUNDO}`],
+  ['sapato', `A single plain toddler shoe, small white canvas shoe with blue laces and a blue rubber sole, completely plain sides with no stripe and no mark of any kind, seen from the side, ${FUNDO}`],
+  ['banana', `A single ripe yellow banana, ${FUNDO}`],
+  ['pato', `A single yellow rubber duck bath toy with an orange beak, seen from the side, ${FUNDO}`],
   ['icone-toca', `Three toddler toys side by side: a red rubber ball, a teal plastic cup and a small brown plush dog, ${FUNDO}`],
   ['icone-cade', `A small brown plush toy peeking out from under a soft cream blanket, half hidden, ${FUNDO}`],
   ['icone-musica', `Four colorful wooden toy blocks in a row, red, yellow, teal and purple, ${FUNDO}`],
+  ['icone-onde', `A toddler index finger pointing at a red rubber ball, with a yellow rubber duck and a teal cup beside it, ${FUNDO}`],
 ];
 
 // O tom importa tanto quanto a palavra: e a voz que a crianca vai ouvir enquanto
@@ -53,8 +57,19 @@ const PALAVRAS = [
   ['bola', 'bola'],
   ['copo', 'copo'],
   ['cachorro', 'cachorro'],
+  ['sapato', 'sapato'],
+  ['banana', 'banana'],
+  ['pato', 'pato'],
   ['achou', 'achou!'],
   ['cade', 'cadê?'],
+  // A pergunta e um arquivo inteiro por objeto, e nao "onde esta" colado com o
+  // nome: emenda de dois audios soa de robo, e o artigo muda com a palavra.
+  ['onde-bola', 'onde está a bola?'],
+  ['onde-copo', 'onde está o copo?'],
+  ['onde-cao', 'onde está o cachorro?'],
+  ['onde-sapato', 'onde está o sapato?'],
+  ['onde-banana', 'onde está a banana?'],
+  ['onde-pato', 'onde está o pato?'],
 ];
 
 let custoTotal = 0;

@@ -1,4 +1,4 @@
-// Bootstrap e roteamento. Tres telas ao todo: os tres icones, a atividade, e o
+// Bootstrap e roteamento. Tres telas ao todo: os icones, a atividade, e o
 // cartao do pai. Nao existe menu, tutorial nem tela de ajuste ao alcance da
 // crianca: se ela consegue chegar la, o desenho falhou.
 import * as audio from './core/audio.js';
@@ -7,15 +7,18 @@ import * as sessao from './core/session.js';
 import * as palco from './core/stage.js';
 import { aoTocar } from './core/input.js';
 import { criaImagem } from './activities/figura.js';
-import { PALAVRAS } from './config.js';
+import { PALAVRAS, PERGUNTAS } from './config.js';
 import { instalaPortao } from './parent/gate.js';
 import { abrePainel, estaAberto } from './parent/painel.js';
 import { criaCartao } from './parent/cartao.js';
 import tocaEAcontece from './activities/tocaEAcontece.js';
 import cade from './activities/cade.js';
 import musica from './activities/musica.js';
+import ondeEsta from './activities/ondeEsta.js';
 
-const ATIVIDADES = [tocaEAcontece, cade, musica];
+// A ordem nunca muda: ela aprende onde fica cada jogo pela posicao, nao pelo
+// desenho (P9). O novo entra no fim para nao empurrar os que ela ja conhece.
+const ATIVIDADES = [tocaEAcontece, cade, musica, ondeEsta];
 
 let travaDaTela = null;
 let cancelaSessao = null;
@@ -98,12 +101,12 @@ async function inicia() {
   // audio pode demorar ou nem responder em navegador estranho, e nenhuma crianca
   // pode ficar olhando tela branca por causa disso: ate a primeira palavra sair,
   // ela ainda vai tocar num icone e depois num objeto.
-  audio.carregaVozes(PALAVRAS);
+  audio.carregaVozes([...PALAVRAS, ...PERGUNTAS]);
   await storage.carrega();
   instalaPortao(() => {
     if (estaAberto()) return;
-    // A sessao para enquanto o pai mexe nos ajustes, e a crianca volta para os
-    // tres icones quando ele fecha. Mexer na configuracao nao gasta o tempo dela.
+    // A sessao para enquanto o pai mexe nos ajustes, e a crianca volta para a
+    // tela inicial quando ele fecha. Mexer na configuracao nao gasta o tempo dela.
     cancelaSessao?.();
     cancelaSessao = null;
     soltaTela();

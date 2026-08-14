@@ -79,6 +79,26 @@ html, body {
 
 .pula { animation: pula .4s cubic-bezier(.34, 1.56, .64, 1); }
 
+/* ----------------------------------------------------- A4, onde esta? */
+
+/* Grade quadrada em vez de fila: com seis escolhas, uma linha so deixaria cada
+   objeto menor que o dedo dela. O numero de colunas vem do JS, que sabe quantas
+   escolhas tem na rodada. */
+.palco--onde {
+  display: grid;
+  grid-template-columns: repeat(var(--colunas, 1), 1fr);
+  place-content: center;
+  justify-items: center;
+}
+
+.palco--onde .objeto {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  max-width: 26vmin;
+  max-height: 26vmin;
+}
+
 /* --------------------------------------------------------- A2, cade? */
 
 .vaga { position: relative; overflow: hidden; }
