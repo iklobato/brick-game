@@ -4,3 +4,8 @@ node_modules/
 .env.*
 .playwright-mcp/
 *.log
+
+# O ~/.gitignore global desta maquina ignora assets/ inteiro, e aqui isso
+# apagaria as fotos e as vozes do Cade? do commit: o jogo subiria mudo e sem
+# imagem, caindo no desenho de reserva, sem ninguem perceber ate abrir no tablet.
+!cade/assets/

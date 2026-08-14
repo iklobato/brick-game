@@ -1,0 +1,237 @@
+/* O visual serve a cognicao, nao ao gosto de adulto: fundo quieto, objeto em
+   destaque total, nada se mexendo sozinho no fundo. */
+:root {
+  --bg: #FAF7F2;
+  --bg-deep: #E8E2D8;
+  --ink: #2B2724;
+  --joy: #F2B705;
+  --calm: #4C9A8F;
+  --soft: #E8756B;
+
+  /* 2 cm sao ~76 px CSS. Este e o piso da NN/g com folga por cima. */
+  --touch-min: 96px;
+  --touch-gap: 32px;
+  --canto: 24px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 system-ui, sans-serif;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overflow: hidden;
+}
+
+.alvo {
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.figura { width: 82%; height: 82%; pointer-events: none; }
+.figura svg, .figura img { width: 100%; height: 100%; display: block; }
+/* contain, nunca cover: cortar a foto tira justamente a borda que faz a crianca
+   reconhecer o objeto. */
+.figura img { object-fit: contain; }
+.figura--foto { position: absolute; inset: 0; width: auto; height: auto; background: #fff; }
+
+/* ------------------------------------------------------------- telas */
+
+.inicio, .palco {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  height: 100dvh;
+  gap: var(--touch-gap);
+  padding: 4vmin;
+}
+
+.icone, .objeto, .vaga {
+  width: 26vmin;
+  height: 26vmin;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  border-radius: var(--canto);
+  background: var(--bg-deep);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  /* Sombra baixa e dura: o objeto parece que da para pegar. */
+  box-shadow: 0 8px 0 rgba(0, 0, 0, .08);
+}
+
+/* A tela inicial tem tres alvos e mais nada em volta, entao eles podem ser os
+   maiores da faixa que o RFC manda (20% a 30% da menor dimensao da tela). */
+.icone { width: 30vmin; height: 30vmin; padding: 3vmin; }
+.icone svg { width: 100%; height: 100%; }
+
+.pula { animation: pula .4s cubic-bezier(.34, 1.56, .64, 1); }
+
+/* ----------------------------------------------------- A4, onde esta? */
+
+/* Grade quadrada em vez de fila: com seis escolhas, uma linha so deixaria cada
+   objeto menor que o dedo dela. O numero de colunas vem do JS, que sabe quantas
+   escolhas tem na rodada. */
+.palco--onde {
+  display: grid;
+  grid-template-columns: repeat(var(--colunas, 1), 1fr);
+  place-content: center;
+  justify-items: center;
+}
+
+.palco--onde .objeto {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  max-width: 26vmin;
+  max-height: 26vmin;
+}
+
+/* --------------------------------------------------------- A2, cade? */
+
+.vaga { position: relative; overflow: hidden; }
+
+.cortina {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--canto);
+  background: var(--soft);
+  transform: translateY(-112%);
+  transition: transform .38s cubic-bezier(.34, 1.4, .64, 1);
+  pointer-events: none;
+}
+.cortina.fechada { transform: translateY(0); pointer-events: auto; }
+.cortina.chama { animation: chama .7s ease-in-out 2; }
+
+.borboleta {
+  position: absolute;
+  left: 30%;
+  top: 30%;
+  width: 40%;
+  height: 40%;
+  pointer-events: none;
+  animation: voa 1.6s ease-out forwards;
+}
+
+/* -------------------------------------------------------- A3, musica */
+
+.palco--musica { align-items: stretch; }
+
+.bloco {
+  flex: 1;
+  height: 62vmin;
+  align-self: center;
+  border-radius: var(--canto);
+  background: var(--cor);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, .08);
+}
+.bloco.acende { animation: pulsa .36s ease-out; }
+
+/* --------------------------------------------- cartao do pai e painel */
+
+.cartao, .painel-corpo {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 6vmin;
+}
+
+.cartao {
+  height: 100dvh;
+  overflow-y: auto;
+  background: var(--bg);
+  touch-action: pan-y;
+}
+
+.cartao h1 { color: var(--calm); font-size: 1.6rem; margin: 0 0 .4rem; }
+.cartao h2 { font-size: 1.1rem; margin: 1.6rem 0 .4rem; }
+.cartao .sugestao { font-size: 1.35rem; line-height: 1.4; }
+.cartao ul { font-size: 1.15rem; padding-left: 1.2rem; }
+.cartao li { margin: .4rem 0; }
+.cartao .fecho { color: var(--calm); font-weight: 600; }
+.cartao .toques { color: #6B635C; }
+
+.painel {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.painel h1 { font-size: 1.5rem; }
+.painel h2 { font-size: 1.05rem; margin: 1.8rem 0 .6rem; }
+.nota { color: #6B635C; }
+.erro { color: #B3382E; }
+
+.campo { display: flex; align-items: center; gap: 1rem; margin: .6rem 0; }
+.campo span { flex: 1; }
+.campo input { flex: 1; min-height: 44px; font: inherit; }
+
+.linha { display: flex; align-items: center; gap: .6rem; margin: .5rem 0; flex-wrap: wrap; }
+.linha b { min-width: 6rem; }
+
+.botao {
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--bg-deep);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.botao--gravando { background: var(--soft); color: #fff; border-color: var(--soft); }
+.botao--principal { margin-top: 2rem; background: var(--calm); color: #fff; border-color: var(--calm); }
+
+/* A porta do modo pai. Invisivel de proposito. */
+.portao { position: fixed; z-index: 90; width: 11vmin; height: 11vmin; }
+.portao--cima-esquerda { top: 0; left: 0; }
+.portao--baixo-direita { bottom: 0; right: 0; }
+
+/* O jogo foi desenhado para tablet deitado. Num celular em pe a conta nao fecha:
+   quatro blocos de 96px com 32px de folga entre eles passam da largura da tela e
+   o ultimo sai pela borda. Em vez de encolher o alvo abaixo do piso, o que
+   deixaria o dedo dela errando, os blocos quebram em duas linhas. */
+@media (max-width: 760px) {
+  :root { --touch-gap: 16px; }
+  .inicio, .palco { padding: 2vmin; }
+  .palco--musica { flex-wrap: wrap; }
+  .bloco { flex-basis: 40%; height: 30vmin; }
+}
+
+/* --------------------------------------------------------- animacoes */
+
+.entra { animation: entra .35s ease-out; }
+.acena > * { animation: acena 1.2s ease-in-out; }
+.sai { animation: sai .6s ease-in forwards; }
+
+@keyframes pula { 50% { transform: translateY(-14%) scale(1.08); } }
+@keyframes pulsa { 50% { transform: scale(1.06); } }
+@keyframes chama { 25% { transform: translateX(-6%); } 75% { transform: translateX(6%); } }
+@keyframes voa {
+  from { transform: translate(0, 0) scale(.6); opacity: 0; }
+  30% { opacity: 1; }
+  to { transform: translate(60%, -120%) scale(1); opacity: 0; }
+}
+@keyframes entra { from { opacity: 0; transform: scale(.96); } }
+@keyframes acena { 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
+@keyframes sai { to { opacity: 0; transform: translateY(12%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
