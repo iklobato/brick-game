@@ -1,0 +1,149 @@
+// Self-check do Cade?, no mesmo padrao dos outros jogos daqui: abra
+// /cade/#test e leia o console. Ele existe porque tres criterios do RFC so dao
+// para medir no aparelho de verdade, nao no node: o tamanho real do alvo em
+// pixels, o tempo entre o dedo e o som, e o fluxo inteiro ate o cartao do pai.
+// So e carregado quando o hash pede: a crianca nunca baixa este arquivo.
+import * as audio from './core/audio.js';
+import * as storage from './core/storage.js';
+
+const AJUSTES_DO_TESTE = { duracaoMin: 0.05, descansoMin: 0, volume: 0 };
+
+const ALVO_MINIMO_PX = 96;
+const LATENCIA_MAXIMA_MS = 100;
+
+let falhas = 0;
+
+function checa(condicao, texto) {
+  if (condicao) {
+    console.log(`ok   ${texto}`);
+    return;
+  }
+  falhas++;
+  console.error(`FALHOU ${texto}`);
+}
+
+const espera = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// dispatchEvent e sincrono, entao o que corre entre as duas medidas e o caminho
+// inteiro do toque: o listener, a decisao e o agendamento do som.
+function toca(elemento) {
+  const antes = performance.now();
+  elemento.dispatchEvent(
+    new PointerEvent('pointerdown', { pointerId: 1, bubbles: true, cancelable: true, width: 20, height: 20 }),
+  );
+  const depois = performance.now();
+  window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, bubbles: true }));
+  return depois - antes;
+}
+
+function alvosPequenos() {
+  return [...document.querySelectorAll('.alvo')]
+    .map((elemento) => ({ elemento, caixa: elemento.getBoundingClientRect() }))
+    .filter(({ caixa }) => caixa.width < ALVO_MINIMO_PX || caixa.height < ALVO_MINIMO_PX);
+}
+
+function confereLayout(onde) {
+  const pequenos = alvosPequenos();
+  const detalhe = pequenos
+    .map(({ elemento, caixa }) => `${elemento.className} ${Math.round(caixa.width)}x${Math.round(caixa.height)}`)
+    .join(', ');
+  checa(pequenos.length === 0, `todo alvo de ${onde} tem ${ALVO_MINIMO_PX}px ou mais ${detalhe && `(${detalhe})`}`);
+
+  // Alvo cortado pela borda e alvo que ela nao alcanca. Nao da para medir isso
+  // pelo scrollWidth da pagina: o body e overflow hidden, entao o que passa da
+  // tela some da conta em vez de aparecer como sobra.
+  const fora = [...document.querySelectorAll('.alvo')]
+    .map((elemento) => elemento.getBoundingClientRect())
+    .filter((caixa) => caixa.left < -1 || caixa.right > window.innerWidth + 1 || caixa.bottom > window.innerHeight + 1);
+  checa(fora.length === 0, `nenhum alvo de ${onde} fica cortado pela borda da tela`);
+}
+
+async function roteiro() {
+  const icones = document.querySelectorAll('.icone');
+  checa(icones.length === 3, 'a tela inicial tem os tres icones');
+  checa(document.querySelectorAll('.portao').length === 2, 'os dois cantos do modo pai estao instalados');
+  checa(!document.getElementById('app').textContent.trim(), 'a tela da crianca nao tem texto nenhum');
+  confereLayout('tela inicial');
+
+  // A1
+  toca(icones[0]);
+  await espera(450); // deixa a animacao de entrada acabar antes de medir
+  checa(document.querySelectorAll('.objeto').length === 3, 'A1 abre com tres objetos');
+  confereLayout('A1');
+  const objeto = document.querySelector('.objeto');
+  const latencia = toca(objeto);
+  checa(latencia < LATENCIA_MAXIMA_MS, `o som sai em ${latencia.toFixed(1)}ms, abaixo dos ${LATENCIA_MAXIMA_MS}ms`);
+  await espera(60);
+  checa(objeto.classList.contains('pula'), 'o objeto responde ao toque na hora');
+
+  // Fim da sessao e cartao do pai
+  await espera(6000);
+  const cartao = document.querySelector('.cartao');
+  checa(!!cartao, 'a sessao acaba sozinha e entrega o cartao do pai');
+  checa(document.querySelectorAll('.cartao li').length === 3, 'o cartao traz as tres perguntas');
+  checa(!!document.querySelector('.cartao .sugestao'), 'o cartao traz a brincadeira fora da tela');
+
+  cartao.querySelector('.botao').click();
+  await espera(450); // deixa a animacao de entrada acabar antes de medir
+  checa(document.querySelectorAll('.icone').length === 3, 'fechar o cartao volta para os tres icones');
+
+  // A2
+  toca(document.querySelectorAll('.icone')[1]);
+  await espera(1400);
+  const cortina = document.querySelector('.cortina');
+  checa(cortina?.classList.contains('fechada'), 'A2 esconde o objeto atras da cortina');
+  confereLayout('A2');
+  toca(cortina);
+  await espera(100);
+  checa(!cortina.classList.contains('fechada'), 'tocar a cortina devolve o objeto');
+
+  await espera(6000);
+  document.querySelector('.cartao .botao').click();
+  await espera(450); // deixa a animacao de entrada acabar antes de medir
+
+  // A3
+  toca(document.querySelectorAll('.icone')[2]);
+  await espera(450); // deixa a animacao de entrada acabar antes de medir
+  const blocos = document.querySelectorAll('.bloco');
+  checa(blocos.length === 4, 'A3 abre com os quatro blocos');
+  confereLayout('A3');
+  toca(blocos[0]);
+  await espera(60);
+  checa(blocos[0].classList.contains('acende'), 'o bloco acende junto com a nota');
+
+  // Modo pai: dois cantos opostos, tres segundos.
+  const cantos = document.querySelectorAll('.portao');
+  cantos[0].dispatchEvent(new PointerEvent('pointerdown', { pointerId: 2, bubbles: true }));
+  await espera(3400);
+  checa(!document.querySelector('.painel'), 'um canto so nao abre o modo pai');
+  cantos[1].dispatchEvent(new PointerEvent('pointerdown', { pointerId: 3, bubbles: true }));
+  await espera(3400);
+  checa(!!document.querySelector('.painel'), 'os dois cantos por tres segundos abrem o modo pai');
+  document.querySelector('.painel .botao--principal').click();
+}
+
+export async function roda() {
+  // O teste mexe no relogio da sessao. O que era do pai volta como estava. Os
+  // ajustes passam pelo storage, e nao pelo localStorage cru: o storage guarda
+  // a configuracao em memoria e regravaria a antiga por cima na primeira vez
+  // que o app contasse uma sessao.
+  const antes = Object.fromEntries(Object.keys(AJUSTES_DO_TESTE).map((chave) => [chave, storage.config.get(chave)]));
+  const fimAntes = localStorage.getItem('cade:fim');
+  for (const [chave, valor] of Object.entries(AJUSTES_DO_TESTE)) storage.config.set(chave, valor);
+  localStorage.removeItem('cade:fim');
+  audio.defineVolume(0);
+
+  try {
+    await roteiro();
+  } catch (erro) {
+    falhas++;
+    console.error('FALHOU o self-check parou no meio', erro);
+  } finally {
+    for (const [chave, valor] of Object.entries(antes)) storage.config.set(chave, valor);
+    audio.defineVolume(storage.config.get('volume'));
+    if (fimAntes === null) localStorage.removeItem('cade:fim');
+    else localStorage.setItem('cade:fim', fimAntes);
+  }
+
+  console.log(falhas === 0 ? 'self-check ok' : `self-check com ${falhas} falha(s)`);
+}
