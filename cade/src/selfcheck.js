@@ -6,7 +6,10 @@
 import * as audio from './core/audio.js';
 import * as storage from './core/storage.js';
 
-const AJUSTES_DO_TESTE = { duracaoMin: 0.05, descansoMin: 0, volume: 0 };
+// O volume NAO entra aqui. Ele e baixado so em memoria, durante o teste: gravar
+// zero no aparelho e o jeito de deixar o jogo mudo para sempre se a pagina for
+// fechada no meio, e ai nem o pai descobre por que sumiu o som.
+const AJUSTES_DO_TESTE = { duracaoMin: 0.05, descansoMin: 0 };
 
 const ALVO_MINIMO_PX = 96;
 const LATENCIA_MAXIMA_MS = 100;
@@ -207,7 +210,7 @@ export async function roda() {
   const fimAntes = localStorage.getItem('cade:fim');
   for (const [chave, valor] of Object.entries(AJUSTES_DO_TESTE)) storage.config.set(chave, valor);
   localStorage.removeItem('cade:fim');
-  audio.defineVolume(0);
+  audio.defineVolume(0); // so em memoria: o que esta guardado continua o do pai
 
   try {
     await roteiro();

@@ -115,6 +115,15 @@ checa(
   `o nome do cache combina com os arquivos (troque para 'cade-${impressao}' em cade/sw.js)`,
 );
 
+// -------------------------------- o teste nao pode deixar o jogo mudo
+
+// Isto ja aconteceu: o self-check gravava volume zero no aparelho e restaurava
+// so no fim, entao fechar a pagina no meio deixava o jogo mudo para sempre, sem
+// erro nenhum e sem ninguem entender por que a voz sumiu.
+const selfcheck = le('src/selfcheck.js');
+const ajustesDoTeste = /const AJUSTES_DO_TESTE = \{([^}]*)\}/.exec(selfcheck)?.[1] ?? '';
+checa(!/volume/.test(ajustesDoTeste), 'o self-check nao grava volume no aparelho, so baixa em memoria');
+
 // ------------------------------------------------- P7: conta do tempo
 
 const memoria = new Map();
