@@ -1,10 +1,11 @@
 # Jogos
 
-Tres jogos que rodam no navegador, sem instalar nada e sem dependencia nenhuma:
+Quatro jogos que rodam no navegador, sem instalar nada e sem dependencia nenhuma:
 o servidor e Node puro e o WebSocket e escrito na mao (RFC 6455). Estao no ar em
 **https://games.iklobato.com**.
 
-Todos os tres jogam a dois em tempo real.
+Tres deles jogam a dois em tempo real. O quarto, o Cade?, e de outra especie:
+uma crianca de dois anos e um adulto no mesmo tablet, sem rede nenhuma.
 
 ## Os jogos
 
@@ -13,6 +14,7 @@ Todos os tres jogam a dois em tempo real.
 | Bricks Master | `brick/` | mesmo tabuleiro, os dois atirando ao mesmo tempo |
 | Canyon Defense | `tower/` | mesmo mapa, torres com dono e dinheiro separado |
 | Agar | `survivor/` | mesmo mundo, e um pode comer o outro |
+| Cade? | `cade/` | nao pela rede: e a crianca e o adulto lado a lado |
 
 O menu (`index.html`) tambem aponta para o [HardTerm](https://hardterm.top/), que
 mora em outro site e nao faz parte deste repositorio.
@@ -57,6 +59,33 @@ assim que um acaba jogaria a linha em cima das bolas de quem ainda esta
 atirando. Nao existe mais placar de vencedor: os dois chegam ao fim juntos, no
 mesmo nivel.
 
+## O Cade? nao segue nenhuma regra acima
+
+E o unico jogo daqui que nao usa o servidor: nao abre WebSocket, nao tem sala,
+nao guarda placar e nunca fala com a rede depois de instalado (o service worker
+serve tudo do cache, da para conferir desligando o wi-fi). O publico e uma
+crianca de 24 a 36 meses **sempre junto de um adulto**, e o desenho inteiro sai
+do que a pesquisa diz que funciona nessa idade:
+
+- **Um gesto so: tocar.** Nada de arrastar, pinca, girar ou segurar. O toque
+  dispara no `pointerdown`, nunca no `click`, porque o dedo dela sai do alvo
+  antes de soltar.
+- **Alvo de 2 cm no minimo** (`--touch-min: 96px`), som em menos de 100 ms
+  (Web Audio sintetizado, sem arquivo para carregar).
+- **Sem texto, sem erro, sem placar, sem cronometro visivel.** Cortina errada
+  devolve uma borboleta, nunca um som de erro.
+- **A sessao acaba sozinha em 4 minutos** e trava por 60 minutos. Reter a
+  crianca aqui e defeito, nao metrica.
+- **O fim entrega um cartao para o adulto**: uma brincadeira fora da tela e tres
+  perguntas para fazer a ela. Esse cartao e o produto; a tela e so a desculpa.
+
+O modo pai (voz gravada, fotos da casa, tempos, volume) abre segurando os dois
+cantos opostos da tela por tres segundos, que e o gesto que ela nao faz sozinha.
+
+Enquanto o pai nao grava a propria voz, o jogo fala pela voz do aparelho
+(`speechSynthesis`). Em alguns Android essa voz e baixada da internet: gravar a
+voz de verdade resolve isso e vale mais para a crianca.
+
 ## Rodar aqui
 
 ```
@@ -71,6 +100,7 @@ Nao ha nada para instalar: sem `package.json`, sem `node_modules`.
 ```
 node server.js            # em um terminal
 node test-server.js       # em outro: 31 checks de sala, papel, repasse e saida
+node cade/test-cade.js    # sozinho: alvo de 2 cm, so pointer, cache e tempo
 ```
 
 Cada jogo tem o proprio self-check, que roda ao abrir a pagina com `#test`:
@@ -95,6 +125,7 @@ aba aberta ocupa a sala e o `test-server.js` encontra o estado sujo.
 | `save.js` | moedas, melhorias e metas do Bricks Master, no `localStorage` |
 | `menu.js` | o menu e a contagem de gente em cada sala |
 | `test-server.js` | clientes WebSocket de verdade contra o servidor |
+| `cade/test-cade.js` | as regras do Cade? que um refactor quebra sem avisar |
 
 ## No ar
 

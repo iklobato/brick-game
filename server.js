@@ -19,6 +19,10 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   // sem o tipo certo o navegador recusa o svg e cai de volta no favicon.ico
   '.svg': 'image/svg+xml',
+  // sem isto o manifest do Cade? chega como octet-stream e o tablet nao oferece
+  // instalar o jogo na tela inicial
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
 };
 
 // "/" e "/brick" e "/brick/" viram todos o index.html da pasta certa
