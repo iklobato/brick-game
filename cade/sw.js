@@ -1,7 +1,12 @@
 // Cache primeiro, sempre. Depois de instalado o jogo nao fala com a rede nunca
 // mais: da para desligar o wi-fi e conferir. Isso nao e so comodidade offline, e
 // a garantia de que nao existe pixel, anuncio nem coleta escondida no caminho.
-const CACHE = 'cade-v1';
+// O nome do cache carrega a impressao digital dos arquivos abaixo, e o
+// test-cade.js falha quando os dois discordam. Sem isso o cache-first vira uma
+// armadilha: um tablet que ja instalou o jogo continuaria com a versao antiga
+// para sempre, porque nada aqui volta a perguntar nada para a rede. Trocar este
+// nome e o unico jeito de uma correcao chegar ate ele.
+const CACHE = 'cade-dd8f90751b1119f7';
 
 const ARQUIVOS = [
   './',

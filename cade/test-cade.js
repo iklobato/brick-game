@@ -3,6 +3,7 @@
 // completo do service worker e a conta do tempo de sessao.
 // Rode com: node cade/test-cade.js
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { execFileSync } = require('child_process');
@@ -93,6 +94,21 @@ for (const arquivo of listados) {
   checa(fs.existsSync(path.join(RAIZ, arquivo)), `sw.js lista ${arquivo}, que existe de verdade`);
 }
 checa(sw.includes("'./'"), 'sw.js guarda a raiz do app, senao abrir offline cai no 404');
+
+// O cache e cache-first e nunca reconsulta a rede, entao o unico aviso de que
+// existe versao nova e o nome do cache mudar. Amarrando o nome ao conteudo, um
+// arquivo editado sem bumpar o cache falha aqui em vez de falhar no tablet dele
+// daqui a um mes.
+const impressao = crypto
+  .createHash('sha256')
+  .update([...listados].sort().filter((arquivo) => arquivo).map((arquivo) => le(arquivo)).join('\0'))
+  .digest('hex')
+  .slice(0, 16);
+const nomeDoCache = /const CACHE = '([^']+)'/.exec(sw)?.[1];
+checa(
+  nomeDoCache === `cade-${impressao}`,
+  `o nome do cache combina com os arquivos (troque para 'cade-${impressao}' em cade/sw.js)`,
+);
 
 // ------------------------------------------------- P7: conta do tempo
 

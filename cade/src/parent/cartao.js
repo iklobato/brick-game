@@ -12,6 +12,18 @@ function cria(tag, propriedades = {}, filhos = []) {
   return elemento;
 }
 
+// O unico numero que o app guarda sobre a crianca, e ele nunca sai do aparelho.
+// Zero toque e a informacao mais importante das tres, nao a menos: dedo parado
+// quer dizer que ela nao estava brincando, so olhando, e ai o caminho e menos
+// tela e nao mais.
+function engajamento(toques) {
+  if (toques === 0) {
+    return 'Ele nao tocou na tela nenhuma vez. Ficar so olhando e o sinal de parar: leve ele para a brincadeira aqui de cima em vez de abrir o jogo de novo.';
+  }
+  const pouco = toques < POUCOS_TOQUES ? ' Pouco: veja se a atividade confundiu ou cansou.' : '';
+  return `Ele tocou ${toques} ${toques === 1 ? 'vez' : 'vezes'}.${pouco}`;
+}
+
 export function criaCartao(idAtividade, toques, aoFechar) {
   const sessoes = storage.config.get('sessoes') ?? 0;
   const { sugestao, perguntas } = sugestaoDe(idAtividade, sessoes);
@@ -24,17 +36,7 @@ export function criaCartao(idAtividade, toques, aoFechar) {
     cria('p', { className: 'fecho', textContent: FECHO }),
   ]);
 
-  // O unico numero que o app guarda sobre a crianca, e ele nunca sai daqui:
-  // serve so para o pai saber se ela entrou na brincadeira ou ficou parada.
-  if (toques > 0) {
-    const pouco = toques < POUCOS_TOQUES ? ' Pouco: veja se a atividade confundiu ou cansou.' : '';
-    cartao.appendChild(
-      cria('p', {
-        className: 'toques',
-        textContent: `Ele tocou ${toques} ${toques === 1 ? 'vez' : 'vezes'}.${pouco}`,
-      }),
-    );
-  }
+  cartao.appendChild(cria('p', { className: 'toques', textContent: engajamento(toques) }));
 
   if (sessoes <= 1) cartao.appendChild(cria('p', { className: 'nota', textContent: TRAVA_DO_APARELHO }));
 

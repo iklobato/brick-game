@@ -82,6 +82,7 @@ async function roteiro() {
   checa(!!cartao, 'a sessao acaba sozinha e entrega o cartao do pai');
   checa(document.querySelectorAll('.cartao li').length === 3, 'o cartao traz as tres perguntas');
   checa(!!document.querySelector('.cartao .sugestao'), 'o cartao traz a brincadeira fora da tela');
+  checa(!!document.querySelector('.cartao .toques'), 'o cartao diz ao pai se ela brincou ou ficou parada');
 
   cartao.querySelector('.botao').click();
   await espera(450); // deixa a animacao de entrada acabar antes de medir
