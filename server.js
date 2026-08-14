@@ -23,6 +23,10 @@ const MIME = {
   // instalar o jogo na tela inicial
   '.json': 'application/json; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
+  // as fotos e as vozes do Cade?
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.wav': 'audio/wav',
 };
 
 // "/" e "/brick" e "/brick/" viram todos o index.html da pasta certa
