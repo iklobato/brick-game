@@ -17,6 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { pathToFileURL } = require('url');
 
 const CHAVE_OPENROUTER = process.env.OPENROUTER_API_KEY;
 const CHAVE_OPENAI = process.env.OPENAI_API_KEY;
@@ -51,26 +52,13 @@ const TOM =
   'Fale em portugues do Brasil, devagar, com voz calma, quente e alegre, ' +
   'do jeito que um pai fala com um bebe de dois anos no colo.';
 
-// O arquivo usa o id sem acento; o que a crianca ouve leva a pontuacao, porque
-// "achou!" e "cade?" so soam certos com ela.
-const PALAVRAS = [
-  ['bola', 'bola'],
-  ['copo', 'copo'],
-  ['cachorro', 'cachorro'],
-  ['sapato', 'sapato'],
-  ['banana', 'banana'],
-  ['pato', 'pato'],
-  ['achou', 'achou!'],
-  ['cade', 'cadê?'],
-  // A pergunta e um arquivo inteiro por objeto, e nao "onde esta" colado com o
-  // nome: emenda de dois audios soa de robo, e o artigo muda com a palavra.
-  ['onde-bola', 'onde está a bola?'],
-  ['onde-copo', 'onde está o copo?'],
-  ['onde-cao', 'onde está o cachorro?'],
-  ['onde-sapato', 'onde está o sapato?'],
-  ['onde-banana', 'onde está a banana?'],
-  ['onde-pato', 'onde está o pato?'],
-];
+// O que cada voz diz sai do config.js do proprio jogo, e nao de uma copia aqui:
+// se a lista de objetos crescer ou uma frase mudar, o audio gravado e a voz de
+// reserva do aparelho continuam dizendo a mesma coisa.
+const falasDoJogo = async () => {
+  const { FALAS } = await import(pathToFileURL(path.join(__dirname, 'src', 'config.js')).href);
+  return [...FALAS];
+};
 
 let custoTotal = 0;
 
@@ -211,7 +199,7 @@ async function principal() {
   for (const [nome, pedido] of IMAGENS) await geraImagem(nome, pedido);
 
   console.log(`vozes (${MODELO_VOZ}, voz ${VOZ}):`);
-  for (const palavra of PALAVRAS) await geraVoz(palavra);
+  for (const fala of await falasDoJogo()) await geraVoz(fala);
 
   console.log(`\ncusto desta rodada: US$ ${custoTotal.toFixed(4)}`);
   console.log('agora rode: node cade/test-cade.js  (ele cobra o nome novo do cache)');

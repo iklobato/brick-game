@@ -153,6 +153,43 @@ async function roteiro() {
   checa(document.querySelectorAll('.palco--onde .objeto').length === 2,
         `depois de ${ACERTOS_POR_NIVEL} acertos entra mais uma escolha na tela`);
   confereLayout('A4 com duas escolhas');
+
+  await confereVoz();
+}
+
+// Duas falas ao mesmo tempo viram um borrao em que a crianca nao reconhece
+// nenhuma das duas palavras. Isto ja aconteceu de verdade: o "cade?" dura quase
+// dois segundos e o "achou!" entrava por cima quando ela tocava a cortina.
+async function confereVoz() {
+  const original = {
+    start: AudioBufferSourceNode.prototype.start,
+    stop: AudioBufferSourceNode.prototype.stop,
+  };
+  let tocando = 0;
+  let pico = 0;
+  AudioBufferSourceNode.prototype.start = function (...args) {
+    tocando += 1;
+    pico = Math.max(pico, tocando);
+    this.addEventListener('ended', () => { tocando = Math.max(0, tocando - 1); });
+    return original.start.apply(this, args);
+  };
+  AudioBufferSourceNode.prototype.stop = function (...args) {
+    tocando = Math.max(0, tocando - 1);
+    return original.stop.apply(this, args);
+  };
+
+  try {
+    const duracao = audio.fala('cade');
+    checa(duracao > 0, `a voz do jogo esta carregada: o "cade?" tem ${duracao}ms`);
+    await espera(250);
+    audio.fala('achou');
+    await espera(200);
+    checa(pico <= 1, `nunca tocam duas vozes ao mesmo tempo (pico de ${pico})`);
+  } finally {
+    AudioBufferSourceNode.prototype.start = original.start;
+    AudioBufferSourceNode.prototype.stop = original.stop;
+    audio.silencia();
+  }
 }
 
 export async function roda() {

@@ -23,6 +23,7 @@ const svg = (conteudo) =>
 export const OBJETOS = [
   {
     id: 'bola',
+    artigo: 'a',
     palavra: 'bola',
     foto: 'assets/img/bola.jpg',
     desenho: svg(`
@@ -33,6 +34,7 @@ export const OBJETOS = [
   },
   {
     id: 'copo',
+    artigo: 'o',
     palavra: 'copo',
     foto: 'assets/img/copo.jpg',
     desenho: svg(`
@@ -43,6 +45,7 @@ export const OBJETOS = [
   },
   {
     id: 'cao',
+    artigo: 'o',
     palavra: 'cachorro',
     foto: 'assets/img/cao.jpg',
     desenho: svg(`
@@ -58,6 +61,7 @@ export const OBJETOS = [
   },
   {
     id: 'sapato',
+    artigo: 'o',
     palavra: 'sapato',
     foto: 'assets/img/sapato.jpg',
     desenho: svg(`
@@ -68,6 +72,7 @@ export const OBJETOS = [
   },
   {
     id: 'banana',
+    artigo: 'a',
     palavra: 'banana',
     foto: 'assets/img/banana.jpg',
     desenho: svg(`
@@ -77,6 +82,7 @@ export const OBJETOS = [
   },
   {
     id: 'pato',
+    artigo: 'o',
     palavra: 'pato',
     foto: 'assets/img/pato.jpg',
     desenho: svg(`
@@ -104,6 +110,18 @@ export const PALAVRAS = [...OBJETOS.map((obj) => obj.palavra), 'achou', 'cade'];
 // coisas, que e o que a crianca repete.
 export const perguntaDe = (id) => `onde-${id}`;
 export const PERGUNTAS = OBJETOS.map((objeto) => perguntaDe(objeto.id));
+
+// O que cada arquivo de voz diz, palavra por palavra. Uma lista so, lida pelo
+// gerador de audio e pela voz de reserva do aparelho: assim o que foi gravado e
+// o que seria lido nunca dizem coisas diferentes.
+export const FALAS = new Map([
+  ...OBJETOS.map((objeto) => [objeto.palavra, objeto.palavra]),
+  ['achou', 'achou!'],
+  ['cade', 'cadê?'],
+  ...OBJETOS.map((objeto) => [perguntaDe(objeto.id), `onde está ${objeto.artigo} ${objeto.palavra}?`]),
+]);
+
+export const textoFalado = (id) => FALAS.get(id) ?? id;
 
 // A voz que veio no jogo. Serve so enquanto o pai nao grava a dele: voz de gente
 // conhecida vale mais que qualquer sintese, e e a gravacao dele que manda.

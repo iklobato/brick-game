@@ -16,6 +16,9 @@ const MAXIMO_DE_ESCOLHAS = 6;
 const ESPERA_ATE_PERGUNTAR_MS = 600;
 const ESPERA_ATE_PROXIMA_MS = 2000;
 const ESPERA_ATE_REPETIR_MS = 1400;
+// Quando a voz e a do aparelho nao da para saber quanto ela dura, entao a
+// segunda palavra espera um tempo de palavra falada.
+const ESPERA_ENTRE_FALAS_MS = 900;
 
 const agenda = criaAgenda();
 let palco = null;
@@ -53,8 +56,12 @@ function acerta(peca, objeto) {
   acertos += 1;
   peca.botao.classList.add('pula');
   audio.som('achou');
-  agenda.depois(260, () => audio.fala('achou'));
-  agenda.depois(600, () => audio.fala(objeto.palavra));
+  // "achou!" e depois o nome, um esperando o outro acabar. Duas falas ao mesmo
+  // tempo viram ruido e ela nao reconhece nenhuma das duas palavras.
+  agenda.depois(260, () => {
+    const duracao = audio.fala('achou') || ESPERA_ENTRE_FALAS_MS;
+    agenda.depois(duracao + 150, () => audio.fala(objeto.palavra));
+  });
   agenda.depois(ESPERA_ATE_PROXIMA_MS, rodada);
 }
 

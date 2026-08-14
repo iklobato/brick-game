@@ -3,13 +3,14 @@
 // Os sons sao sintetizados na hora, entao nao ha arquivo para carregar nem
 // espera nenhuma: o primeiro toque ja soa.
 
-import { vozPadraoDe } from '../config.js';
+import { textoFalado, vozPadraoDe } from '../config.js';
 
 let ctx = null;
 let mestre = null;
 let volume = 0.8;
 const gravadas = new Map(); // palavra -> AudioBuffer com a voz do pai
 const padroes = new Map(); // palavra -> AudioBuffer da voz que veio no jogo
+let vozTocando = null; // a fala no ar agora, para poder calar antes da proxima
 
 function garante() {
   if (ctx) return ctx;
@@ -79,8 +80,10 @@ const SONS = {
   toque: () => tom({ de: 440, dur: 0.12, pico: 0.18 }),
 };
 
+// Objeto sem som proprio (sapato, banana) cai no toque generico: toque que nao
+// devolve nada soa como aparelho quebrado, e ai ela para de tentar.
 export function som(nome) {
-  SONS[nome]?.();
+  (SONS[nome] ?? SONS.toque)();
 }
 
 export function nota(frequencia) {
@@ -122,26 +125,44 @@ export const temVoz = (palavra) => gravadas.has(palavra);
 // A voz do pai ganha de todas: voz conhecida e personalizacao, e personalizacao
 // e o que encurta o transfer deficit. Depois vem a voz gravada que veio no jogo,
 // e a do aparelho fica por ultimo, so para o caso de faltar arquivo.
+// Devolve quanto tempo a fala vai durar, em ms, para quem precisa emendar uma
+// palavra na outra. Zero quando quem fala e o aparelho, que nao diz o tamanho.
 export function fala(palavra) {
+  // Uma voz de cada vez. Gente nao fala duas palavras ao mesmo tempo, e duas
+  // faixas juntas viram um ruido onde a crianca nao reconhece nenhuma das duas:
+  // era o que acontecia quando ela tocava a cortina com o "cade?" ainda no ar.
+  silencia();
+
   const buffer = gravadas.get(palavra) ?? padroes.get(palavra);
   if (buffer) {
     garante();
     const fonte = ctx.createBufferSource();
     fonte.buffer = buffer;
     fonte.connect(mestre);
+    fonte.addEventListener('ended', () => {
+      if (vozTocando === fonte) vozTocando = null;
+    });
     fonte.start(0);
-    return;
+    vozTocando = fonte;
+    return Math.round(buffer.duration * 1000);
   }
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const frase = new SpeechSynthesisUtterance(palavra);
+
+  if (!('speechSynthesis' in window)) return 0;
+  // O aparelho fala o texto, nunca o nome do arquivo: sem isto ele leria
+  // "onde-bola" em vez de "onde esta a bola?".
+  const frase = new SpeechSynthesisUtterance(textoFalado(palavra));
   frase.lang = 'pt-BR';
   frase.rate = 0.85;
   frase.pitch = 1.15;
   frase.volume = volume;
   speechSynthesis.speak(frase);
+  return 0;
 }
 
 export function silencia() {
+  if (vozTocando) {
+    vozTocando.stop();
+    vozTocando = null;
+  }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
