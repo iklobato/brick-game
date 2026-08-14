@@ -1,4 +1,5 @@
 // Todo numero que o RFC fixa mora aqui, para nao ficar espalhado por atividade.
+// Este arquivo e so dado: quem da comportamento a ele e dominio/Catalogo.js.
 
 export const TOQUE = {
   // Toque mais largo que isso e a mao apoiada na tela, nao o dedo.
@@ -103,38 +104,18 @@ export const OBJETOS = [
   },
 ];
 
-export const objetoPorId = (id) => OBJETOS.find((obj) => obj.id === id);
-
-// "Toca e acontece" mostra tres e so tres: com o palco cheio a crianca para de
-// olhar o objeto e passa a varrer a tela (P6). O "Onde esta?" cresce ate seis,
-// mas um de cada vez, conforme ela acerta.
-export const OBJETOS_BASE = OBJETOS.slice(0, 3);
-
-// Palavras que o pai pode gravar com a propria voz. As tres primeiras nomeiam
-// os objetos; "achou" e "cade" sao as falas do jogo do esconde.
-export const PALAVRAS = [...OBJETOS.map((obj) => obj.palavra), 'achou', 'cade'];
-
-// A pergunta do "Onde esta?" e um audio inteiro por objeto. O pai nao grava
-// estas: sao catorze arquivos, e o que vale a pena ele gravar e o nome das
-// coisas, que e o que a crianca repete.
-export const perguntaDe = (id) => `onde-${id}`;
-export const PERGUNTAS = OBJETOS.map((objeto) => perguntaDe(objeto.id));
-
-// O que cada arquivo de voz diz, palavra por palavra. Uma lista so, lida pelo
-// gerador de audio e pela voz de reserva do aparelho: assim o que foi gravado e
-// o que seria lido nunca dizem coisas diferentes.
-export const FALAS = new Map([
-  ...OBJETOS.map((objeto) => [objeto.palavra, objeto.palavra]),
+// As duas falas que sao do jogo, e nao de um objeto: o "cade?" que abre o
+// esconde e o "achou!" que fecha. Ficam com o texto ao lado porque a mesma lista
+// alimenta o gerador de audio e a voz de reserva do aparelho, e assim o que foi
+// gravado e o que seria lido nunca dizem coisas diferentes.
+export const FALAS_DO_JOGO = new Map([
   ['achou', 'achou!'],
   ['cade', 'cadê?'],
-  ...OBJETOS.map((objeto) => [perguntaDe(objeto.id), `onde está ${objeto.artigo} ${objeto.palavra}?`]),
 ]);
-
-export const textoFalado = (id) => FALAS.get(id) ?? id;
 
 // A voz que veio no jogo. Serve so enquanto o pai nao grava a dele: voz de gente
 // conhecida vale mais que qualquer sintese, e e a gravacao dele que manda.
-export const vozPadraoDe = (palavra) => `assets/audio/${palavra}.wav`;
+export const caminhoDaVoz = (id) => `assets/audio/${id}.wav`;
 
 // Do e mi e sol e do de novo: qualquer combinacao dessas quatro soa certa, entao
 // nao existe nota errada para a crianca tocar (P5).

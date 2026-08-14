@@ -1,0 +1,68 @@
+// A3. Quatro blocos, quatro notas que combinam entre si. Nao ha padrao certo.
+// De vinte em vinte segundos o app toca duas notas sozinho e acende os blocos:
+// e um convite a imitar, nunca uma cobranca. Se ela ignorar, nada acontece.
+import Atividade from './Atividade.js';
+import { NOTAS } from '../catalogo.js';
+
+const CORES = ['#E8756B', '#F2B705', '#4C9A8F', '#7A6FB0'];
+const CONVITE_MS = 20000;
+const SILENCIO_ANTES_DO_CONVITE_MS = 2000;
+const ESPERA_DO_ACENDE_MS = 360;
+const ESPERA_ENTRE_AS_NOTAS_MS = 480;
+
+const DESENHO = `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <rect x="8" y="30" width="18" height="40" rx="6" fill="#E8756B"/>
+    <rect x="31" y="18" width="18" height="64" rx="6" fill="#F2B705"/>
+    <rect x="54" y="26" width="18" height="48" rx="6" fill="#4C9A8F"/>
+    <rect x="77" y="38" width="15" height="24" rx="6" fill="#7A6FB0"/>
+  </svg>`;
+
+export default class Musica extends Atividade {
+  #ultimoToque = 0;
+
+  constructor() {
+    super({ id: 'musica', icone: 'assets/img/icone-musica.jpg', desenho: DESENHO });
+  }
+
+  montar(raiz, contexto) {
+    raiz.classList.add('palco', 'palco--musica');
+
+    const blocos = NOTAS.map((frequencia, indice) => {
+      const bloco = document.createElement('button');
+      bloco.type = 'button';
+      bloco.className = 'alvo bloco';
+      bloco.style.setProperty('--cor', CORES[indice]);
+      bloco.setAttribute('aria-label', `nota ${indice + 1}`);
+      contexto.toque.aoTocar(bloco, () => {
+        contexto.sons.nota(frequencia);
+        this.#acende(bloco);
+        this.#ultimoToque = Date.now();
+        contexto.aoInteragir(`nota-${indice + 1}`);
+      });
+      raiz.appendChild(bloco);
+      return bloco;
+    });
+
+    this.#ultimoToque = 0;
+    this.agenda.aCada(CONVITE_MS, () => {
+      if (Date.now() - this.#ultimoToque < SILENCIO_ANTES_DO_CONVITE_MS) return;
+      this.#convida(blocos, contexto.sons);
+    });
+  }
+
+  #acende(bloco) {
+    bloco.classList.add('acende');
+    this.agenda.depois(ESPERA_DO_ACENDE_MS, () => bloco.classList.remove('acende'));
+  }
+
+  #convida(blocos, sons) {
+    const primeiro = Math.floor(Math.random() * blocos.length);
+    const segundo = (primeiro + 1 + Math.floor(Math.random() * (blocos.length - 1))) % blocos.length;
+    [primeiro, segundo].forEach((indice, ordem) => {
+      this.agenda.depois(ordem * ESPERA_ENTRE_AS_NOTAS_MS, () => {
+        sons.nota(NOTAS[indice]);
+        this.#acende(blocos[indice]);
+      });
+    });
+  }
+}

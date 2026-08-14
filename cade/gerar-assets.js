@@ -52,12 +52,12 @@ const TOM =
   'Fale em portugues do Brasil, devagar, com voz calma, quente e alegre, ' +
   'do jeito que um pai fala com um bebe de dois anos no colo.';
 
-// O que cada voz diz sai do config.js do proprio jogo, e nao de uma copia aqui:
+// O que cada voz diz sai do catalogo do proprio jogo, e nao de uma copia aqui:
 // se a lista de objetos crescer ou uma frase mudar, o audio gravado e a voz de
 // reserva do aparelho continuam dizendo a mesma coisa.
 const falasDoJogo = async () => {
-  const { FALAS } = await import(pathToFileURL(path.join(__dirname, 'src', 'config.js')).href);
-  return [...FALAS];
+  const { FALAS_DO_JOGO } = await import(pathToFileURL(path.join(__dirname, 'src', 'catalogo.js')).href);
+  return [...FALAS_DO_JOGO];
 };
 
 let custoTotal = 0;

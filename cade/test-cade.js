@@ -48,13 +48,15 @@ checa(/min-height:\s*var\(--touch-min\)/.test(regraDoAlvo), '.alvo prende a altu
 // ------------------------------- P1 e P3: toque por pointer, nunca click
 
 const PROIBIDOS = /addEventListener\(\s*['"](click|dblclick|touchmove|touchstart|dragstart|drag)['"]/;
-const doJogo = listaArquivos(FONTE).filter((arquivo) => !arquivo.includes(`${path.sep}parent${path.sep}`));
+// So o modo pai pode ouvir click: e a unica tela que nao e da crianca.
+const DO_PAI = [`${path.sep}parent${path.sep}`, `${path.sep}pai${path.sep}`];
+const doJogo = listaArquivos(FONTE).filter((arquivo) => !DO_PAI.some((pasta) => arquivo.includes(pasta)));
 for (const arquivo of doJogo) {
   checa(!PROIBIDOS.test(le(arquivo)), `${arquivo} nao escuta click nem arrastar (so pointer)`);
 }
 checa(
-  /addEventListener\(\s*'pointerdown'/.test(le('src/core/input.js')),
-  'input.js dispara no pointerdown, nao no pointerup',
+  /addEventListener\(\s*'pointerdown'/.test(le('src/tela/Toque.js')),
+  'Toque dispara no pointerdown, nao no pointerup',
 );
 
 // ------------------------- os modulos abrem e cada import aponta para algo
@@ -73,6 +75,16 @@ for (const arquivo of listaArquivos(FONTE)) {
     const destino = path.resolve(path.dirname(cheio), importado);
     checa(fs.existsSync(destino), `${arquivo} importa ${importado}, que existe`);
   }
+}
+
+// ------------------------------- OO: nenhum estado mora no modulo
+
+// A regra que segura o refactor de pe. Estado no escopo do modulo e um singleton
+// disfarcado: duas telas da mesma atividade passam a se atrapalhar, e o teste nao
+// consegue montar uma instancia limpa. Se voltar um 'let' aqui, quebra aqui.
+for (const arquivo of listaArquivos(FONTE)) {
+  const soltos = le(arquivo).split('\n').filter((linha) => /^(let|var)\s/.test(linha));
+  checa(soltos.length === 0, `${arquivo} nao guarda estado no escopo do modulo ${soltos.join(' | ')}`);
 }
 
 // ---------------------------------------- privacidade: nada sai daqui
@@ -127,34 +139,53 @@ checa(!/volume/.test(ajustesDoTeste), 'o self-check nao grava volume no aparelho
 // ------------------------------------------------- P7: conta do tempo
 
 const memoria = new Map();
-globalThis.localStorage = {
+const localStorageFalso = {
   getItem: (chave) => (memoria.has(chave) ? memoria.get(chave) : null),
   setItem: (chave, valor) => memoria.set(chave, String(valor)),
   removeItem: (chave) => memoria.delete(chave),
 };
 
-const config = (objeto) => memoria.set('cade:config', JSON.stringify(objeto));
+const daPasta = (arquivo) => pathToFileURL(path.join(FONTE, arquivo)).href;
 
 (async () => {
-  const sessao = await import(pathToFileURL(path.join(FONTE, 'core/session.js')).href);
+  const { default: AjustesLocais } = await import(daPasta('dados/AjustesLocais.js'));
+  const { default: Sessao } = await import(daPasta('dominio/Sessao.js'));
+  const { default: Configuracao } = await import(daPasta('dominio/Configuracao.js'));
 
-  checa(sessao.duracaoMs() === 4 * 60000, 'sem configuracao a sessao dura os 4 minutos do RFC');
-  checa(sessao.descansoMs() === 60 * 60000, 'sem configuracao o descanso e de 60 minutos');
+  // Relogio falso, mas em escala de relogio de verdade: comecar perto do zero
+  // faria "nunca jogou" parecer "acabou de jogar", porque o descanso de uma hora
+  // e maior que o proprio instante.
+  let agora = 1755000000000;
+  const relogio = { agora: () => agora, espera: () => () => {} };
+  const ajustes = new AjustesLocais(localStorageFalso);
+  const sessao = new Sessao({ ajustes, relogio });
+
+  checa(ajustes.le().duracaoMs() === 4 * 60000, 'sem configuracao a sessao dura os 4 minutos do RFC');
+  checa(ajustes.le().descansoMs() === 60 * 60000, 'sem configuracao o descanso e de 60 minutos');
   checa(sessao.podeComecar(), 'antes da primeira sessao a crianca pode comecar');
 
   sessao.marcaFim();
   checa(!sessao.podeComecar(), 'logo depois de acabar a sessao, comecar de novo esta bloqueado');
 
-  config({ duracaoMin: 2, descansoMin: 0 });
-  checa(sessao.duracaoMs() === 2 * 60000, 'o pai encurta a sessao para 2 minutos');
+  agora += 61 * 60000;
+  checa(sessao.podeComecar(), 'passado o descanso, a crianca pode comecar de novo');
+
+  ajustes.guarda(ajustes.le().com({ duracaoMin: 2, descansoMin: 0 }));
+  checa(ajustes.le().duracaoMs() === 2 * 60000, 'o pai encurta a sessao para 2 minutos');
+  sessao.marcaFim();
   checa(sessao.podeComecar(), 'descanso zero libera na hora, que e como o pai desliga a trava');
 
   // Zero tem que valer zero: com `Number(x) || padrao` ele viraria 60 minutos.
-  config({ descansoMin: 0 });
-  checa(sessao.descansoMs() === 0, 'descanso zero nao cai no padrao de 60 minutos');
+  checa(ajustes.le().descansoMs() === 0, 'descanso zero nao cai no padrao de 60 minutos');
+
+  // O jogo nao tem volume mudo: sem som nao existe jogo, e um aparelho ja ficou
+  // assim para sempre por causa de um teste que gravou zero e nao devolveu.
+  memoria.set('cade:config', JSON.stringify({ volume: 0 }));
+  checa(ajustes.le().volume >= 0.2, 'volume zero guardado no aparelho volta ao minimo audivel');
 
   memoria.set('cade:config', '{quebrado');
-  checa(sessao.duracaoMs() === 4 * 60000, 'configuracao corrompida volta ao padrao em vez de derrubar o app');
+  checa(ajustes.le().duracaoMs() === 4 * 60000, 'configuracao corrompida volta ao padrao em vez de derrubar o app');
+  checa(Configuracao.padrao().volume === 0.8, 'o volume padrao continua 0.8');
 
   console.log(falhas === 0 ? '\ntudo certo' : `\n${falhas} falha(s)`);
   process.exit(falhas === 0 ? 0 : 1);
