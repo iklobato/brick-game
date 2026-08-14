@@ -10,7 +10,9 @@ const { execFileSync } = require('child_process');
 
 const RAIZ = __dirname;
 const FONTE = path.join(RAIZ, 'src');
-const IGNORADOS = new Set(['sw.js', 'test-cade.js', 'README.md']);
+// Ficam de fora da conta do cache: o sw nao guarda a si mesmo, e teste e gerador
+// sao ferramenta de bancada, nao coisa que o tablet baixa.
+const IGNORADOS = new Set(['sw.js', 'test-cade.js', 'gerar-assets.js', 'README.md']);
 let falhas = 0;
 
 function checa(condicao, texto) {
@@ -23,6 +25,7 @@ function checa(condicao, texto) {
 }
 
 const le = (relativo) => fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
+const leBytes = (relativo) => fs.readFileSync(path.join(RAIZ, relativo));
 
 function listaArquivos(pasta) {
   return fs.readdirSync(pasta, { withFileTypes: true }).flatMap((item) => {
@@ -74,9 +77,13 @@ for (const arquivo of listaArquivos(FONTE)) {
 
 // ---------------------------------------- privacidade: nada sai daqui
 
-const PARA_FORA = /\bfetch\s*\(|XMLHttpRequest|new WebSocket|https?:\/\//;
+// O jogo usa fetch para buscar a voz que veio nele, e o service worker responde
+// do cache. Entao a regra nao pode ser "nada de fetch", tem que ser "nenhum
+// endereco que saia daqui": nada de http, nada de //outra-casa, nada de XHR ou
+// WebSocket. O que sobra so alcanca arquivo do proprio /cade/.
+const PARA_FORA = /XMLHttpRequest|new WebSocket|https?:\/\/|['"`]\/\//;
 for (const arquivo of listaArquivos(FONTE)) {
-  checa(!PARA_FORA.test(le(arquivo)), `${arquivo} nao fala com a rede`);
+  checa(!PARA_FORA.test(le(arquivo)), `${arquivo} nao alcanca nada fora do aparelho`);
 }
 
 // ------------------------------------------- offline: o cache completo
@@ -99,11 +106,9 @@ checa(sw.includes("'./'"), 'sw.js guarda a raiz do app, senao abrir offline cai 
 // existe versao nova e o nome do cache mudar. Amarrando o nome ao conteudo, um
 // arquivo editado sem bumpar o cache falha aqui em vez de falhar no tablet dele
 // daqui a um mes.
-const impressao = crypto
-  .createHash('sha256')
-  .update([...listados].sort().filter((arquivo) => arquivo).map((arquivo) => le(arquivo)).join('\0'))
-  .digest('hex')
-  .slice(0, 16);
+const digestor = crypto.createHash('sha256');
+for (const arquivo of [...listados].sort()) digestor.update(arquivo).update(leBytes(arquivo));
+const impressao = digestor.digest('hex').slice(0, 16);
 const nomeDoCache = /const CACHE = '([^']+)'/.exec(sw)?.[1];
 checa(
   nomeDoCache === `cade-${impressao}`,

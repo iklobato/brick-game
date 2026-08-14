@@ -6,7 +6,7 @@
 // armadilha: um tablet que ja instalou o jogo continuaria com a versao antiga
 // para sempre, porque nada aqui volta a perguntar nada para a rede. Trocar este
 // nome e o unico jeito de uma correcao chegar ate ele.
-const CACHE = 'cade-dd8f90751b1119f7';
+const CACHE = 'cade-7b6e6d66f7e5555c';
 
 const ARQUIVOS = [
   './',
@@ -31,6 +31,17 @@ const ARQUIVOS = [
   './src/parent/painel.js',
   './src/parent/recorder.js',
   './src/parent/suggestions.js',
+  './assets/img/bola.jpg',
+  './assets/img/copo.jpg',
+  './assets/img/cao.jpg',
+  './assets/img/icone-toca.jpg',
+  './assets/img/icone-cade.jpg',
+  './assets/img/icone-musica.jpg',
+  './assets/audio/bola.wav',
+  './assets/audio/copo.wav',
+  './assets/audio/cachorro.wav',
+  './assets/audio/achou.wav',
+  './assets/audio/cade.wav',
 ];
 
 self.addEventListener('install', (evento) => {

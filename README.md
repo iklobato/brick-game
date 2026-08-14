@@ -82,9 +82,33 @@ do que a pesquisa diz que funciona nessa idade:
 O modo pai (voz gravada, fotos da casa, tempos, volume) abre segurando os dois
 cantos opostos da tela por tres segundos, que e o gesto que ela nao faz sozinha.
 
-Enquanto o pai nao grava a propria voz, o jogo fala pela voz do aparelho
-(`speechSynthesis`). Em alguns Android essa voz e baixada da internet: gravar a
-voz de verdade resolve isso e vale mais para a crianca.
+### As fotos e as vozes
+
+Os objetos sao foto de verdade e as palavras sao voz de verdade, os dois em
+`cade/assets/` (410 KB no total). Foram gerados uma vez pelo `gerar-assets.js`,
+que roda **aqui na maquina** e grava os arquivos no repositorio: o jogo continua
+sem tocar na rede quando a crianca esta usando.
+
+```
+node cade/gerar-assets.js            # gera so o que falta
+node cade/gerar-assets.js --refazer  # gera tudo de novo
+```
+
+Dois provedores, por um motivo pratico:
+
+- **Fotos: OpenRouter** (`google/gemini-3-pro-image`). Entrega foto de produto
+  em fundo branco muito boa. O `sips` do proprio macOS corta em quadrado e
+  encolhe para 512px, senao seriam 440 KB por objeto no cache do tablet.
+- **Vozes: TTS da OpenAI** (`gpt-4o-mini-tts`). A saida de audio da OpenRouter e
+  um modelo de **conversa**, nao de leitura: mandar "cade?" faz ele responder
+  "o que voce esta procurando?" em vez de falar a palavra, e nenhuma instrucao
+  de sistema segurou isso. TTS le o texto e acabou.
+
+Cada objeto tem tres camadas, da melhor para a pior: a **foto do brinquedo dele**
+que o pai poe no modo pai, a **foto que veio no jogo**, e o **desenho** em SVG,
+que so aparece se o arquivo faltar. A voz segue a mesma ordem: gravacao do pai,
+voz do jogo, e por ultimo a voz do aparelho. Foto generica ja e melhor que
+desenho chapado, mas o ursinho dele continua sendo melhor que as duas.
 
 ## Rodar aqui
 
@@ -126,6 +150,7 @@ aba aberta ocupa a sala e o `test-server.js` encontra o estado sujo.
 | `menu.js` | o menu e a contagem de gente em cada sala |
 | `test-server.js` | clientes WebSocket de verdade contra o servidor |
 | `cade/test-cade.js` | as regras do Cade? que um refactor quebra sem avisar |
+| `cade/gerar-assets.js` | gera as fotos e as vozes do Cade?, uma vez, fora do jogo |
 
 ## No ar
 

@@ -3,10 +3,13 @@
 // Os sons sao sintetizados na hora, entao nao ha arquivo para carregar nem
 // espera nenhuma: o primeiro toque ja soa.
 
+import { vozPadraoDe } from '../config.js';
+
 let ctx = null;
 let mestre = null;
 let volume = 0.8;
 const gravadas = new Map(); // palavra -> AudioBuffer com a voz do pai
+const padroes = new Map(); // palavra -> AudioBuffer da voz que veio no jogo
 
 function garante() {
   if (ctx) return ctx;
@@ -92,16 +95,35 @@ export async function registraVoz(palavra, blob) {
   gravadas.set(palavra, await ctx.decodeAudioData(dados));
 }
 
+// Carrega a voz que veio junto com o jogo. Sao arquivos do proprio /cade/, que o
+// service worker serve do cache: nenhuma requisicao sai do aparelho, e sem eles
+// o jogo continua funcionando com a voz sintetica.
+export async function carregaVozes(palavras) {
+  garante();
+  await Promise.all(
+    palavras.map(async (palavra) => {
+      try {
+        const resposta = await fetch(vozPadraoDe(palavra));
+        if (!resposta.ok) throw new Error(String(resposta.status));
+        padroes.set(palavra, await ctx.decodeAudioData(await resposta.arrayBuffer()));
+      } catch (erro) {
+        console.warn(`sem a voz de "${palavra}" no jogo`, erro);
+      }
+    }),
+  );
+}
+
 export function esqueceVoz(palavra) {
   gravadas.delete(palavra);
 }
 
 export const temVoz = (palavra) => gravadas.has(palavra);
 
-// A voz do pai ganha da voz do aparelho sempre: voz conhecida e personalizacao,
-// e personalizacao e o que encurta o transfer deficit.
+// A voz do pai ganha de todas: voz conhecida e personalizacao, e personalizacao
+// e o que encurta o transfer deficit. Depois vem a voz gravada que veio no jogo,
+// e a do aparelho fica por ultimo, so para o caso de faltar arquivo.
 export function fala(palavra) {
-  const buffer = gravadas.get(palavra);
+  const buffer = gravadas.get(palavra) ?? padroes.get(palavra);
   if (buffer) {
     garante();
     const fonte = ctx.createBufferSource();

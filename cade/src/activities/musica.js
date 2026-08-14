@@ -31,6 +31,7 @@ function convida(blocos) {
 
 export default {
   id: 'musica',
+  icone: 'assets/img/icone-musica.jpg',
   desenho: `<svg viewBox="0 0 100 100" aria-hidden="true">
     <rect x="8" y="30" width="18" height="40" rx="6" fill="#E8756B"/>
     <rect x="31" y="18" width="18" height="64" rx="6" fill="#F2B705"/>

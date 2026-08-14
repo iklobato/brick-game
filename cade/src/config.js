@@ -15,12 +15,16 @@ export const SESSAO = {
 const svg = (conteudo) =>
   `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">${conteudo}</svg>`;
 
-// Os desenhos sao provisorios: o modo pai troca cada um pela foto do objeto de
-// verdade da casa, que e o que faz o aprendizado atravessar a tela (P8).
+// Tres camadas, da melhor para a pior: a foto do brinquedo de verdade da casa
+// (o modo pai poe), a foto realista que veio junto com o jogo, e o desenho, que
+// so aparece se o arquivo faltar. A ordem e essa porque o que faz o aprendizado
+// atravessar a tela e o objeto ser o mesmo dos dois lados (P8): foto generica ja
+// e melhor que desenho chapado, e o ursinho dele e melhor que as duas.
 export const OBJETOS = [
   {
     id: 'bola',
     palavra: 'bola',
+    foto: 'assets/img/bola.jpg',
     desenho: svg(`
       <circle cx="50" cy="52" r="38" fill="#E8756B"/>
       <path d="M12 52a38 38 0 0 1 76 0" fill="none" stroke="#FAF7F2" stroke-width="9"/>
@@ -30,6 +34,7 @@ export const OBJETOS = [
   {
     id: 'copo',
     palavra: 'copo',
+    foto: 'assets/img/copo.jpg',
     desenho: svg(`
       <path d="M28 22h44l-6 62a8 8 0 0 1-8 7H42a8 8 0 0 1-8-7z" fill="#4C9A8F"/>
       <path d="M31 46h38l-4 38a8 8 0 0 1-8 7H43a8 8 0 0 1-8-7z" fill="#8FD0C6"/>
@@ -39,6 +44,7 @@ export const OBJETOS = [
   {
     id: 'cao',
     palavra: 'cachorro',
+    foto: 'assets/img/cao.jpg',
     desenho: svg(`
       <ellipse cx="20" cy="46" rx="12" ry="22" fill="#8C6239"/>
       <ellipse cx="80" cy="46" rx="12" ry="22" fill="#8C6239"/>
@@ -57,6 +63,10 @@ export const objetoPorId = (id) => OBJETOS.find((obj) => obj.id === id);
 // Palavras que o pai pode gravar com a propria voz. As tres primeiras nomeiam
 // os objetos; "achou" e "cade" sao as falas do jogo do esconde.
 export const PALAVRAS = [...OBJETOS.map((obj) => obj.palavra), 'achou', 'cade'];
+
+// A voz que veio no jogo. Serve so enquanto o pai nao grava a dele: voz de gente
+// conhecida vale mais que qualquer sintese, e e a gravacao dele que manda.
+export const vozPadraoDe = (palavra) => `assets/audio/${palavra}.wav`;
 
 // Do e mi e sol e do de novo: qualquer combinacao dessas quatro soa certa, entao
 // nao existe nota errada para a crianca tocar (P5).

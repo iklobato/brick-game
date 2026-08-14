@@ -6,6 +6,8 @@ import * as storage from './core/storage.js';
 import * as sessao from './core/session.js';
 import * as palco from './core/stage.js';
 import { aoTocar } from './core/input.js';
+import { criaImagem } from './activities/figura.js';
+import { PALAVRAS } from './config.js';
 import { instalaPortao } from './parent/gate.js';
 import { abrePainel, estaAberto } from './parent/painel.js';
 import { criaCartao } from './parent/cartao.js';
@@ -44,7 +46,7 @@ function telaInicial() {
     botao.type = 'button';
     botao.className = 'alvo icone';
     botao.setAttribute('aria-label', atividade.id);
-    botao.innerHTML = atividade.desenho;
+    botao.appendChild(criaImagem(atividade.icone, atividade.desenho));
     aoTocar(botao, () => {
       audio.desbloqueia();
       audio.som('toque');
@@ -92,6 +94,11 @@ async function encerra(atividade) {
 // --------------------------------------------------------------- boot
 
 async function inicia() {
+  // A voz carrega em segundo plano, sem segurar a tela inicial. Decodificar
+  // audio pode demorar ou nem responder em navegador estranho, e nenhuma crianca
+  // pode ficar olhando tela branca por causa disso: ate a primeira palavra sair,
+  // ela ainda vai tocar num icone e depois num objeto.
+  audio.carregaVozes(PALAVRAS);
   await storage.carrega();
   instalaPortao(() => {
     if (estaAberto()) return;

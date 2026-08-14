@@ -81,7 +81,7 @@ function linhaDeVoz(palavra) {
 
 function linhaDeFoto(objeto) {
   const escolha = cria('input', { type: 'file', accept: 'image/*' });
-  const apagar = cria('button', { type: 'button', className: 'botao', textContent: 'voltar ao desenho' });
+  const apagar = cria('button', { type: 'button', className: 'botao', textContent: 'voltar a foto do jogo' });
   escolha.addEventListener('change', async () => {
     const arquivo = escolha.files?.[0];
     if (arquivo) await storage.guardaFoto(objeto.id, arquivo);
@@ -113,8 +113,8 @@ export function abrePainel(aoTerminar = () => {}) {
       cria('p', {
         className: 'nota',
         textContent: podeGravar()
-          ? 'Sem gravacao o jogo usa a voz do aparelho. Sua voz vale mais: ela e conhecida e e o que ajuda o que esta na tela a virar coisa de verdade.'
-          : 'Este navegador nao deixa gravar audio. O jogo vai usar a voz do aparelho.',
+          ? 'O jogo ja vem com uma voz gravada. A sua vale mais: ela e conhecida, e e isso que ajuda o que esta na tela a virar coisa de verdade para ele.'
+          : 'Este navegador nao deixa gravar audio. O jogo vai usar a voz que ja veio nele.',
       }),
       ...(podeGravar() ? PALAVRAS.map(linhaDeVoz) : []),
     ]),
@@ -123,7 +123,7 @@ export function abrePainel(aoTerminar = () => {}) {
       cria('h2', { textContent: 'Fotos da casa' }),
       cria('p', {
         className: 'nota',
-        textContent: 'Troque cada desenho pela foto do objeto de verdade dele. E o que faz o jogo virar o mundo real.',
+        textContent: 'As fotos que vieram no jogo sao de brinquedos parecidos. Troque cada uma pela foto do objeto de verdade dele: e o que liga a tela ao mundo real.',
       }),
       ...OBJETOS.map(linhaDeFoto),
     ]),

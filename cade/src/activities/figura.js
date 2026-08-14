@@ -1,19 +1,34 @@
-// O mesmo objeto aparece em duas atividades, e nas duas ele tem que ser a foto
-// da casa quando existe uma. Um lugar so para essa escolha.
+// O mesmo objeto aparece em duas atividades, e nas duas ele obedece a mesma
+// ordem: foto que o pai colocou, depois a foto que veio no jogo, e o desenho so
+// se nao houver nem uma nem outra. Um lugar so para essa escolha.
 import { fotoDe } from '../core/storage.js';
 
-export function criaFigura(objeto) {
-  const elemento = document.createElement('div');
-  elemento.className = 'figura';
-  const foto = fotoDe(objeto.id);
-  if (foto) {
-    elemento.classList.add('figura--foto');
-    elemento.style.backgroundImage = `url(${foto})`;
-  } else {
-    elemento.innerHTML = objeto.desenho;
+// Se o arquivo sumir do cache, a tela nao pode ficar com um buraco: o desenho
+// entra no lugar e a crianca nem percebe.
+export function criaImagem(caminho, desenho) {
+  const caixa = document.createElement('div');
+  caixa.className = 'figura';
+  if (!caminho) {
+    caixa.innerHTML = desenho;
+    return caixa;
   }
-  return elemento;
+  // A foto tem fundo branco proprio, entao ela ocupa a peca inteira: deixar a
+  // caixa bege aparecendo em volta poe uma moldura no meio do objeto e e ela
+  // que a crianca tem que enxergar.
+  caixa.classList.add('figura--foto');
+  const imagem = document.createElement('img');
+  imagem.src = caminho;
+  imagem.alt = '';
+  imagem.decoding = 'async';
+  imagem.addEventListener('error', () => {
+    caixa.classList.remove('figura--foto');
+    caixa.innerHTML = desenho;
+  });
+  caixa.appendChild(imagem);
+  return caixa;
 }
+
+export const criaFigura = (objeto) => criaImagem(fotoDe(objeto.id) ?? objeto.foto, objeto.desenho);
 
 // Guarda os despertadores da atividade para que trocar de tela nao deixe um
 // som ou uma animacao caindo em cima da tela seguinte.

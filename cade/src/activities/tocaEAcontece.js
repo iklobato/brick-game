@@ -10,6 +10,7 @@ const agenda = criaAgenda();
 
 export default {
   id: 'toca-e-acontece',
+  icone: 'assets/img/icone-toca.jpg',
   desenho: OBJETOS[0].desenho,
 
   mount(raiz, contexto) {

@@ -89,6 +89,7 @@ function rodada() {
 
 export default {
   id: 'cade',
+  icone: 'assets/img/icone-cade.jpg',
   desenho: `<svg viewBox="0 0 100 100" aria-hidden="true">
     <rect x="10" y="10" width="80" height="52" rx="8" fill="#E8756B"/>
     <path d="M10 62h80l-6 12H16z" fill="#C4564C"/>

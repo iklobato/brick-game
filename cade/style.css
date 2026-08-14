@@ -40,8 +40,11 @@ html, body {
 }
 
 .figura { width: 82%; height: 82%; pointer-events: none; }
-.figura svg { width: 100%; height: 100%; display: block; }
-.figura--foto { background: center / contain no-repeat; border-radius: 16px; }
+.figura svg, .figura img { width: 100%; height: 100%; display: block; }
+/* contain, nunca cover: cortar a foto tira justamente a borda que faz a crianca
+   reconhecer o objeto. */
+.figura img { object-fit: contain; }
+.figura--foto { position: absolute; inset: 0; width: auto; height: auto; background: #fff; }
 
 /* ------------------------------------------------------------- telas */
 
@@ -63,11 +66,15 @@ html, body {
   background: var(--bg-deep);
   display: grid;
   place-items: center;
+  position: relative;
+  overflow: hidden;
   /* Sombra baixa e dura: o objeto parece que da para pegar. */
   box-shadow: 0 8px 0 rgba(0, 0, 0, .08);
 }
 
-.icone { padding: 3vmin; }
+/* A tela inicial tem tres alvos e mais nada em volta, entao eles podem ser os
+   maiores da faixa que o RFC manda (20% a 30% da menor dimensao da tela). */
+.icone { width: 30vmin; height: 30vmin; padding: 3vmin; }
 .icone svg { width: 100%; height: 100%; }
 
 .pula { animation: pula .4s cubic-bezier(.34, 1.56, .64, 1); }
