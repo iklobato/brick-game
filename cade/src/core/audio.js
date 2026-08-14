@@ -11,6 +11,8 @@ let volume = 0.8;
 const gravadas = new Map(); // palavra -> AudioBuffer com a voz do pai
 const padroes = new Map(); // palavra -> AudioBuffer da voz que veio no jogo
 let vozTocando = null; // a fala no ar agora, para poder calar antes da proxima
+let carregando = null; // promessa das vozes do jogo enquanto elas ainda chegam
+let pedidoDeFala = 0; // so a fala mais nova interessa quando a voz demora a chegar
 
 function garante() {
   if (ctx) return ctx;
@@ -20,6 +22,21 @@ function garante() {
   mestre.gain.value = volume;
   mestre.connect(ctx.destination);
   return ctx;
+}
+
+// Decodificar nao e tocar, e por isso nao precisa do contexto de saida. Isso
+// importa: contexto de saida criado durante o carregamento da pagina, antes de
+// qualquer toque, nasce suspenso, e ha navegador em que ele nao acorda mais nem
+// com resume. Entao as vozes sao decodificadas num contexto offline, e o que
+// toca de verdade so nasce no primeiro dedo na tela.
+const TAXA_PADRAO = 48000;
+let decodificador = null;
+
+function paraDecodificar() {
+  if (decodificador) return decodificador;
+  const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  decodificador = new Offline(1, 1, TAXA_PADRAO);
+  return decodificador;
 }
 
 // Navegador nenhum deixa tocar som antes de um gesto do usuario, entao isto
@@ -101,27 +118,27 @@ export function nota(frequencia) {
 // ------------------------------------------------------------------ a voz
 
 export async function registraVoz(palavra, blob) {
-  garante();
   const dados = await blob.arrayBuffer();
-  gravadas.set(palavra, await ctx.decodeAudioData(dados));
+  gravadas.set(palavra, await paraDecodificar().decodeAudioData(dados));
 }
 
 // Carrega a voz que veio junto com o jogo. Sao arquivos do proprio /cade/, que o
 // service worker serve do cache: nenhuma requisicao sai do aparelho, e sem eles
 // o jogo continua funcionando com a voz sintetica.
 export async function carregaVozes(palavras) {
-  garante();
-  await Promise.all(
+  carregando = Promise.all(
     palavras.map(async (palavra) => {
       try {
         const resposta = await fetch(vozPadraoDe(palavra));
         if (!resposta.ok) throw new Error(String(resposta.status));
-        padroes.set(palavra, await ctx.decodeAudioData(await resposta.arrayBuffer()));
+        padroes.set(palavra, await paraDecodificar().decodeAudioData(await resposta.arrayBuffer()));
       } catch (erro) {
         console.warn(`sem a voz de "${palavra}" no jogo`, erro);
       }
     }),
   );
+  await carregando;
+  carregando = null;
 }
 
 export function esqueceVoz(palavra) {
@@ -141,7 +158,20 @@ export function fala(palavra) {
   // era o que acontecia quando ela tocava a cortina com o "cade?" ainda no ar.
   silencia();
 
+  const pedido = ++pedidoDeFala;
   const buffer = gravadas.get(palavra) ?? padroes.get(palavra);
+
+  // A voz do jogo carrega em segundo plano para nao segurar a tela inicial, e a
+  // crianca toca o icone antes disso terminar. Cair na voz do aparelho aqui era
+  // perder a frase inteira: no Chrome a primeira fala sintetica da pagina
+  // costuma nao sair, e e justo a que diz o que fazer. Entao espera o arquivo.
+  if (!buffer && carregando) {
+    carregando.then(() => {
+      if (pedido === pedidoDeFala) fala(palavra);
+    });
+    return 0;
+  }
+
   if (buffer) {
     pronto();
     const fonte = ctx.createBufferSource();
@@ -168,6 +198,7 @@ export function fala(palavra) {
 }
 
 export function silencia() {
+  pedidoDeFala += 1; // cancela a fala que estava esperando a voz chegar
   if (vozTocando) {
     vozTocando.stop();
     vozTocando = null;

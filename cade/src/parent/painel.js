@@ -2,7 +2,7 @@
 // crianca. Tudo aqui e ajuste local: nada disso sai do aparelho.
 import * as storage from '../core/storage.js';
 import * as audio from '../core/audio.js';
-import { OBJETOS, PALAVRAS } from '../config.js';
+import { OBJETOS, PALAVRAS, perguntaDe, textoFalado } from '../config.js';
 import { comecaGravacao, podeGravar } from './recorder.js';
 import { TRAVA_DO_APARELHO } from './suggestions.js';
 
@@ -29,6 +29,15 @@ function ajuste(chave, propriedades, aoMudar = () => {}) {
     aoMudar(valor);
   });
   return entrada;
+}
+
+function botaoDeOuvir(palavra) {
+  const ouvir = cria('button', { type: 'button', className: 'botao', textContent: 'ouvir' });
+  ouvir.addEventListener('click', () => {
+    audio.desbloqueia();
+    audio.fala(palavra);
+  });
+  return ouvir;
 }
 
 function linhaDeVoz(palavra) {
@@ -60,18 +69,18 @@ function linhaDeVoz(palavra) {
     });
 
     linha.append(cria('b', { textContent: palavra }), gravar);
-    if (!paraGravacao && audio.temVoz(palavra)) {
-      const ouvir = cria('button', { type: 'button', className: 'botao', textContent: 'ouvir' });
-      ouvir.addEventListener('click', () => {
-        audio.desbloqueia();
-        audio.fala(palavra);
-      });
-      const apagar = cria('button', { type: 'button', className: 'botao', textContent: 'apagar' });
-      apagar.addEventListener('click', async () => {
-        await storage.apagaVoz(palavra);
-        desenha();
-      });
-      linha.append(ouvir, apagar);
+    if (!paraGravacao) {
+      // Ouvir vale sempre, gravado ou nao: e assim que o pai confere se sai som
+      // no aparelho antes de entregar o tablet e descobrir no colo que estava mudo.
+      linha.append(botaoDeOuvir(palavra));
+      if (audio.temVoz(palavra)) {
+        const apagar = cria('button', { type: 'button', className: 'botao', textContent: 'apagar' });
+        apagar.addEventListener('click', async () => {
+          await storage.apagaVoz(palavra);
+          desenha();
+        });
+        linha.append(apagar);
+      }
     }
   };
 
@@ -116,7 +125,21 @@ export function abrePainel(aoTerminar = () => {}) {
           ? 'O jogo ja vem com uma voz gravada. A sua vale mais: ela e conhecida, e e isso que ajuda o que esta na tela a virar coisa de verdade para ele.'
           : 'Este navegador nao deixa gravar audio. O jogo vai usar a voz que ja veio nele.',
       }),
-      ...(podeGravar() ? PALAVRAS.map(linhaDeVoz) : []),
+      ...(podeGravar() ? PALAVRAS.map(linhaDeVoz) : PALAVRAS.map((palavra) =>
+        cria('div', { className: 'linha' }, [cria('b', { textContent: palavra }), botaoDeOuvir(palavra)]))),
+    ]),
+
+    cria('section', {}, [
+      cria('h2', { textContent: 'As perguntas do "onde esta?"' }),
+      cria('p', {
+        className: 'nota',
+        textContent: 'Estas o jogo fala sozinho. Se voce apertar ouvir e nao sair som, o problema e o volume do aparelho ou o silencioso, nao o jogo.',
+      }),
+      ...OBJETOS.map((objeto) =>
+        cria('div', { className: 'linha' }, [
+          cria('b', { textContent: textoFalado(perguntaDe(objeto.id)) }),
+          botaoDeOuvir(perguntaDe(objeto.id)),
+        ])),
     ]),
 
     cria('section', {}, [
