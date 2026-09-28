@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slow Bullet</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; color: #eee; }
+  canvas { display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+  #scope { position: absolute; inset: 0; display: none; }
+  #scope svg { width: 100%; height: 100%; display: block; }
+  #dot { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; background: #fff; border-radius: 50%; box-shadow: 0 0 2px #000; }
+  #stats { position: absolute; left: 16px; bottom: 16px; font-size: 14px; line-height: 1.6; text-shadow: 0 1px 2px #000; }
+  .bar { width: 140px; height: 6px; background: rgba(255,255,255,.2); margin: 2px 0 6px; }
+  .bar > div { height: 100%; background: #9fd3ff; }
+  #breathBar > div { background: #b6f5b0; }
+  #msg { position: absolute; top: 22%; width: 100%; text-align: center; font-size: 30px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 2px 6px #000; transition: opacity .4s; opacity: 0; }
+  #scorePop { position: absolute; right: 8%; top: 40%; font-size: 16px; line-height: 1.5; text-align: right; text-shadow: 0 1px 3px #000; transition: opacity .4s; opacity: 0; }
+  #scorePop b { display: block; font-size: 28px; color: #ffd36b; }
+  #hitmarker { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; opacity: 0; transition: opacity .25s; }
+  #hitmarker::before, #hitmarker::after { content: ''; position: absolute; left: 13px; top: 0; width: 4px; height: 30px; background: #fff; box-shadow: 0 0 3px #000; }
+  #hitmarker::before { transform: rotate(45deg); }
+  #hitmarker::after { transform: rotate(-45deg); }
+  #hitmarker.head::before, #hitmarker.head::after { background: #ff3b30; }
+  #camLabel { position: absolute; top: 16px; width: 100%; text-align: center; font-size: 13px; letter-spacing: 3px; opacity: .8; display: none; }
+  #menu { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); }
+  .panel { max-width: 440px; padding: 28px 32px; background: rgba(20,24,28,.92); border: 1px solid #333; border-radius: 8px; }
+  .panel h1 { margin: 0 0 8px; letter-spacing: 6px; }
+  .panel ul { padding-left: 18px; line-height: 1.7; font-size: 14px; }
+  .panel button { font: inherit; font-size: 16px; padding: 10px 28px; background: #c8a040; color: #111; border: 0; border-radius: 4px; cursor: pointer; }
+  .panel button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="scope"></div>
+  <div id="dot"></div>
+  <div id="camLabel">BULLET CAM · clique para pular</div>
+  <div id="msg"></div>
+  <div id="scorePop"></div>
+  <div id="hitmarker"></div>
+  <div id="stats">
+    <div id="statsText"></div>
+    Fôlego <div class="bar" id="breathBar"><div></div></div>
+    Foco <div class="bar" id="focusBar"><div></div></div>
+  </div>
+</div>
+<div id="menu">
+  <div class="panel">
+    <h1>SLOW BULLET</h1>
+    <p id="menuText">Elimine todos os alvos. A bala cai com a gravidade e desvia com o vento.</p>
+    <ul>
+      <li>Mouse: mirar · Clique esquerdo: atirar</li>
+      <li>Clique direito: luneta · Roda: zoom</li>
+      <li>Shift (segurar): prender a respiração</li>
+      <li>Espaço (segurar): foco em câmera lenta</li>
+      <li>R: recarregar</li>
+    </ul>
+    <button id="startBtn">Jogar</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const BASE_FOV = 70;
+const BULLET_SPEED = 850;
+const GRAVITY = 9.81;
+const WIND_FACTOR = 1.5;          // lateral acceleration per m/s of wind (simplified drift model)
+const SUBSTEP = 1 / 240;
+const MAX_FLIGHT = 3;
+const KILLCAM_SECONDS = 2.5;      // real seconds a bullet-cam flight lasts, whatever the range
+const AFTERMATH_SECONDS = 2.2;
+const MAG_SIZE = 5;
+const TOTAL_AMMO = 25;
+const BOLT_TIME = 1.1;
+const RELOAD_TIME = 2.5;
+const ENEMY_COUNT = 10;
+const RUN_SPEED = 4.5;
+const SCORE = { kill: 100, headshot: 100, running: 75, strongWind: 50, steadyAim: 25 };
+const LONG_SHOT_FROM = 150;       // meters; +1 point per 2 m beyond this
+const STRONG_WIND = 2.5;          // m/s
+const MAX_MULTIPLIER = 4;
+const NEAR_MISS_RADIUS = 1;       // meters from the body axis
+const BODY_HALF_WIDTH = 0.25;
+const BODY_TOP = 1.85;
+const SHAKE_ANGLE = 0.03;         // radians at BASE_FOV
+const EYE = new THREE.Vector3(0, 16, 0);
+const UP = new THREE.Vector3(0, 1, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xa9c4d8);
+scene.fog = new THREE.Fog(0xa9c4d8, 350, 1600);
+const camera = new THREE.PerspectiveCamera(BASE_FOV, innerWidth / innerHeight, 0.02, 4000);
+camera.rotation.order = 'YXZ';
+scene.add(new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.2));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.8);
+sun.position.set(200, 300, 100);
+scene.add(sun);
+
+const materialCache = new Map();
+function lambert(color) {
+  if (!materialCache.has(color)) materialCache.set(color, new THREE.MeshLambertMaterial({ color }));
+  return materialCache.get(color);
+}
+const rand = (min, max) => min + Math.random() * (max - min);
+
+// ---------- static collision: uniform XZ grid of hidden proxy meshes ----------
+// Rendering uses instancing; hit tests only touch the few proxies in the cells a ray crosses.
+const CELL = 40;
+const GROUND_HALF_SIZE = 2500;
+const GRID_OFFSET = 512;
+const cells = new Map();
+const cellKey = (ix, iz) => (ix + GRID_OFFSET) * 1024 + (iz + GRID_OFFSET);
+const proxyBox = new THREE.Box3();
+function addCollider(geometry, matrix) {
+  const proxy = new THREE.Mesh(geometry);
+  proxy.matrixAutoUpdate = false;
+  proxy.matrixWorld.copy(matrix);
+  proxy.userData.stamp = 0;
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  proxyBox.copy(geometry.boundingBox).applyMatrix4(matrix);
+  for (let ix = Math.floor(proxyBox.min.x / CELL); ix <= Math.floor(proxyBox.max.x / CELL); ix++) {
+    for (let iz = Math.floor(proxyBox.min.z / CELL); iz <= Math.floor(proxyBox.max.z / CELL); iz++) {
+      const key = cellKey(ix, iz);
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(proxy);
+    }
+  }
+}
+
+const staticRay = new THREE.Raycaster();
+const candidates = [];
+const chunkStart = new THREE.Vector3(), chunkEnd = new THREE.Vector3();
+let queryStamp = 0;
+function raycastStatic(origin, dir, far) {
+  let groundHit = null;
+  if (dir.y < 0) {
+    const distance = -origin.y / dir.y;
+    const point = origin.clone().addScaledVector(dir, distance);
+    if (distance <= far && Math.abs(point.x) <= GROUND_HALF_SIZE && Math.abs(point.z) <= GROUND_HALF_SIZE) {
+      groundHit = { distance, point, object: ground };
+      far = distance;
+    }
+  }
+  staticRay.set(origin, dir);
+  staticRay.far = far;
+  queryStamp++;
+  let best = null;
+  // March in CELL-long chunks so a long ray only visits the cells it actually crosses.
+  // Each proxy is tested once over the whole ray; a hit inside the chunks walked so far can't be beaten
+  // by a proxy found later, because that proxy would sit in a cell already visited.
+  for (let near = 0; near < far; near += CELL) {
+    const chunkFar = Math.min(near + CELL, far);
+    chunkStart.copy(origin).addScaledVector(dir, near);
+    chunkEnd.copy(origin).addScaledVector(dir, chunkFar);
+    candidates.length = 0;
+    const maxX = Math.floor(Math.max(chunkStart.x, chunkEnd.x) / CELL), maxZ = Math.floor(Math.max(chunkStart.z, chunkEnd.z) / CELL);
+    for (let ix = Math.floor(Math.min(chunkStart.x, chunkEnd.x) / CELL); ix <= maxX; ix++) {
+      for (let iz = Math.floor(Math.min(chunkStart.z, chunkEnd.z) / CELL); iz <= maxZ; iz++) {
+        for (const proxy of cells.get(cellKey(ix, iz)) ?? []) {
+          if (proxy.userData.stamp === queryStamp) continue;
+          proxy.userData.stamp = queryStamp;
+          candidates.push(proxy);
+        }
+      }
+    }
+    const hit = candidates.length ? staticRay.intersectObjects(candidates, false)[0] : null;
+    if (hit && (!best || hit.distance < best.distance)) best = hit;
+    if (best && best.distance <= chunkFar) return best;
+  }
+  return groundHit;
+}
+
+// ---------- world ----------
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(2 * GROUND_HALF_SIZE, 2 * GROUND_HALF_SIZE).rotateX(-Math.PI / 2), lambert(0x5d7a3e));
+scene.add(ground);
+const tower = new THREE.Mesh(new THREE.BoxGeometry(5, 14.5, 5), lambert(0x6e5f4b));
+tower.position.set(0, 7.25, 1.5);
+scene.add(tower);
+for (const mesh of [ground, tower]) {
+  mesh.updateMatrixWorld();
+  mesh.matrixAutoUpdate = false;
+}
+addCollider(tower.geometry, tower.matrixWorld);
+
+function addInstanced(geometry, material, matrices, colors) {
+  const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+  matrices.forEach((matrix, i) => {
+    mesh.setMatrixAt(i, matrix);
+    if (colors) mesh.setColorAt(i, colors[i]);
+    addCollider(geometry, matrix);
+  });
+  mesh.computeBoundingSphere();
+  mesh.matrixAutoUpdate = false;
+  scene.add(mesh);
+}
+
+const BUILDING_COLORS = [0x8a8378, 0x9b8c74, 0x77736d, 0xa39a88].map((hex) => new THREE.Color(hex));
+const buildingBoxes = [], buildingMatrices = [], buildingColors = [];
+for (let i = 0; i < 28; i++) {
+  const size = new THREE.Vector3(rand(8, 26), rand(6, 32), rand(8, 26));
+  const pos = new THREE.Vector3(rand(-450, 450), size.y / 2, rand(-950, -90));
+  buildingMatrices.push(new THREE.Matrix4().compose(pos, new THREE.Quaternion(), size));
+  buildingColors.push(BUILDING_COLORS[i % 4]);
+  buildingBoxes.push(new THREE.Box3().setFromCenterAndSize(pos, size).expandByScalar(1.5));
+}
+addInstanced(new THREE.BoxGeometry(1, 1, 1), lambert(0xffffff), buildingMatrices, buildingColors);
+const insideBuilding = (p) => buildingBoxes.some((box) => box.containsPoint(new THREE.Vector3(p.x, 1, p.z)));
+
+const treeMatrices = [];
+for (let i = 0; i < 160; i++) {
+  const pos = new THREE.Vector3(rand(-650, 650), 0, rand(-1100, -50));
+  if (insideBuilding(pos)) continue;
+  treeMatrices.push(new THREE.Matrix4().compose(pos, new THREE.Quaternion(), new THREE.Vector3().setScalar(rand(0.7, 1.4))));
+}
+addInstanced(new THREE.CylinderGeometry(0.3, 0.4, 4).translate(0, 2, 0), lambert(0x5a4030), treeMatrices);
+addInstanced(new THREE.ConeGeometry(2.5, 7, 8).translate(0, 7, 0), lambert(0x2f5a2c), treeMatrices);
+
+// ---------- enemies ----------
+const legGeometry = new THREE.BoxGeometry(0.16, 0.9, 0.2).translate(0, -0.45, 0);
+const armGeometry = new THREE.BoxGeometry(0.13, 0.62, 0.13).translate(0, -0.28, 0);
+const torsoGeometry = new THREE.BoxGeometry(0.5, 0.65, 0.3);
+const headGeometry = new THREE.SphereGeometry(0.13, 12, 10);
+const ENEMY_CENTER_HEIGHT = 1;
+const ENEMY_REACH = 2.2; // covers a standing or fallen body around its center
+
+class Enemy {
+  constructor(start, end) {
+    this.start = start;
+    this.end = end;
+    this.pathLength = start.distanceTo(end);
+    this.pathProgress = Math.random() * this.pathLength * 2;
+    this.speed = rand(1.2, 1.8);
+    this.alive = true;
+    this.fallProgress = 0;
+    this.stride = 0;
+    this.group = new THREE.Group();
+    this.group.rotation.order = 'YXZ';
+    scene.add(this.group);
+    this.limbs = [];
+    const part = (geometry, color, position, name) => {
+      const mesh = new THREE.Mesh(geometry, lambert(color));
+      mesh.position.copy(position);
+      mesh.userData = { enemy: this, part: name };
+      this.group.add(mesh);
+      return mesh;
+    };
+    for (const side of [-1, 1]) {
+      this.limbs.push({ mesh: part(legGeometry, 0x3b3a2c, new THREE.Vector3(0.11 * side, 0.9, 0), 'body'), phase: side });
+      this.limbs.push({ mesh: part(armGeometry, 0x55553c, new THREE.Vector3(0.33 * side, 1.52, 0), 'body'), phase: -side });
+    }
+    part(torsoGeometry, 0x55553c, new THREE.Vector3(0, 1.25, 0), 'body');
+    part(headGeometry, 0xc99a78, new THREE.Vector3(0, 1.72, 0), 'head');
+    this.placeAt(0);
+  }
+
+  // Ping-pong along the patrol segment; pure in `secondsAhead` so shots can be predicted.
+  // Returns the walking sign (+1 towards end, -1 back).
+  positionAt(secondsAhead, out) {
+    if (!this.alive) {
+      out.copy(this.group.position);
+      return 1;
+    }
+    const doubled = 2 * this.pathLength;
+    const u = (((this.pathProgress + this.speed * secondsAhead) % doubled) + doubled) % doubled;
+    const forward = u < this.pathLength;
+    out.lerpVectors(this.start, this.end, (forward ? u : doubled - u) / this.pathLength);
+    return forward ? 1 : -1;
+  }
+
+  placeAt(secondsAhead) {
+    if (!this.alive) return;
+    const sign = this.positionAt(secondsAhead, this.group.position);
+    this.group.rotation.y = Math.atan2((this.end.x - this.start.x) * sign, (this.end.z - this.start.z) * sign);
+    this.group.updateMatrixWorld(true);
+  }
+
+  update(dt) {
+    if (this.alive) {
+      this.pathProgress += this.speed * dt;
+      this.stride += dt * this.speed * 4;
+      for (const limb of this.limbs) limb.mesh.rotation.x = Math.sin(this.stride) * 0.5 * limb.phase;
+      this.placeAt(0);
+    } else if (this.fallProgress < 1) {
+      this.fallProgress = Math.min(1, this.fallProgress + dt / 0.7);
+      this.group.rotation.x = (Math.PI / 2) * this.fallProgress * this.fallProgress;
+      this.group.updateMatrixWorld(true);
+    }
+  }
+
+  kill(direction) {
+    this.alive = false;
+    this.group.rotation.y = Math.atan2(direction.x, direction.z);
+  }
+
+  get running() {
+    return this.speed >= RUN_SPEED;
+  }
+
+  alarm() {
+    if (this.alive) this.speed = RUN_SPEED;
+  }
+}
+
+const enemies = [];
+const enemyRay = new THREE.Raycaster();
+const enemyCenter = new THREE.Vector3(), closestOnRay = new THREE.Vector3();
+// Cheap sphere-vs-segment reject first; only enemies the ray passes near get posed and triangle-tested.
+function raycastEnemies(origin, dir, far, secondsAhead) {
+  let best = null;
+  for (const enemy of enemies) {
+    enemy.positionAt(secondsAhead, enemyCenter);
+    enemyCenter.y += ENEMY_CENTER_HEIGHT;
+    const along = THREE.MathUtils.clamp(enemyCenter.clone().sub(origin).dot(dir), 0, far);
+    closestOnRay.copy(origin).addScaledVector(dir, along);
+    if (closestOnRay.distanceToSquared(enemyCenter) > ENEMY_REACH * ENEMY_REACH) continue;
+    if (secondsAhead) enemy.placeAt(secondsAhead);
+    enemyRay.set(origin, dir);
+    enemyRay.far = best ? best.distance : far;
+    const hit = enemyRay.intersectObject(enemy.group, true)[0];
+    if (secondsAhead) enemy.placeAt(0);
+    if (hit) best = hit;
+  }
+  return best;
+}
+
+function raycastWorld(origin, dir, far, secondsAhead = 0) {
+  const enemyHit = raycastEnemies(origin, dir, far, secondsAhead);
+  return raycastStatic(origin, dir, enemyHit ? enemyHit.distance : far) ?? enemyHit;
+}
+
+function hasLineOfSight(target) {
+  const toTarget = target.clone().sub(EYE);
+  const distance = toTarget.length();
+  return !raycastStatic(EYE, toTarget.normalize(), distance - 0.5);
+}
+
+for (let attempt = 0; enemies.length < ENEMY_COUNT && attempt < 2000; attempt++) {
+  const distance = rand(120, 750);
+  const start = new THREE.Vector3(rand(-1, 1) * Math.min(250, distance * 0.6), 0, -distance);
+  const heading = rand(0, Math.PI * 2);
+  const end = start.clone().add(new THREE.Vector3(Math.cos(heading), 0, Math.sin(heading)).multiplyScalar(rand(10, 30)));
+  const middle = start.clone().lerp(end, 0.5);
+  if ([start, middle, end].some(insideBuilding)) continue;
+  const head = (p) => p.clone().setY(1.72);
+  if (!hasLineOfSight(head(start)) || !hasLineOfSight(head(end))) continue;
+  enemies.push(new Enemy(start, end));
+}
+
+// ---------- ballistics ----------
+const nextPosition = new THREE.Vector3();
+const segment = new THREE.Vector3();
+// Advances pos/vel by h seconds; returns the first intersection on the way, or null.
+function advance(pos, vel, acc, h, secondsAhead = 0) {
+  nextPosition.copy(pos).addScaledVector(vel, h).addScaledVector(acc, 0.5 * h * h);
+  segment.subVectors(nextPosition, pos);
+  const length = segment.length();
+  const hit = raycastWorld(pos, segment.divideScalar(length), length, secondsAhead);
+  if (!hit) pos.copy(nextPosition);
+  vel.addScaledVector(acc, h);
+  return hit;
+}
+
+function predictShot(origin, velocity, acc) {
+  const pos = origin.clone(), vel = velocity.clone();
+  let time = 0, hit = null;
+  while (time < MAX_FLIGHT && !hit) {
+    hit = advance(pos, vel, acc, SUBSTEP, time);
+    time += SUBSTEP;
+  }
+  return hit && { hit, time };
+}
+
+const bulletGeometry = new THREE.CylinderGeometry(0.004, 0.0078, 0.05, 10);
+const bulletMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b050, emissive: 0x3a2a08, metalness: 0.6, roughness: 0.35 });
+const TRAIL_POINTS = 1024;
+
+const flightSegment = new THREE.Line3();
+const bodyCenter = new THREE.Vector3(), passPoint = new THREE.Vector3(), axisPoint = new THREE.Vector3();
+
+class Bullet {
+  constructor(origin, velocity, acc) {
+    this.origin = origin.clone();
+    this.pos = origin.clone();
+    this.vel = velocity.clone();
+    this.acc = acc.clone();
+    this.age = 0;
+    this.flying = true;
+    this.trailLife = 1.5;
+    this.nearMiss = null;
+    this.mesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    scene.add(this.mesh);
+    this.trailPositions = new Float32Array(TRAIL_POINTS * 3);
+    this.trailCount = 0;
+    this.trailUploaded = 0;
+    const trailGeometry = new THREE.BufferGeometry();
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(this.trailPositions, 3));
+    this.trail = new THREE.Line(trailGeometry, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45 }));
+    this.trail.frustumCulled = false;
+    scene.add(this.trail);
+    this.pushTrail();
+    this.uploadTrail();
+    this.orient();
+  }
+
+  pushTrail() {
+    if (this.trailCount >= TRAIL_POINTS) return;
+    this.pos.toArray(this.trailPositions, this.trailCount * 3);
+    this.trailCount++;
+    this.trail.geometry.setDrawRange(0, this.trailCount);
+  }
+
+  uploadTrail() {
+    const attribute = this.trail.geometry.attributes.position;
+    attribute.clearUpdateRanges();
+    attribute.addUpdateRange(this.trailUploaded * 3, (this.trailCount - this.trailUploaded) * 3);
+    attribute.needsUpdate = true;
+    this.trailUploaded = this.trailCount;
+  }
+
+  orient() {
+    this.mesh.position.copy(this.pos);
+    this.mesh.quaternion.setFromUnitVectors(UP, this.vel.clone().normalize());
+  }
+
+  // Returns the hit when the bullet lands this frame.
+  fly(dt) {
+    let remaining = dt;
+    while (remaining > 0 && this.flying) {
+      const h = Math.min(SUBSTEP, remaining);
+      remaining -= h;
+      this.age += h;
+      flightSegment.start.copy(this.pos);
+      const hit = advance(this.pos, this.vel, this.acc, h);
+      if (hit) this.pos.copy(hit.point);
+      flightSegment.end.copy(this.pos);
+      this.trackNearMiss(flightSegment);
+      this.pushTrail();
+      if (hit || this.age > MAX_FLIGHT) {
+        this.flying = false;
+        this.mesh.visible = false;
+        this.uploadTrail();
+        return hit;
+      }
+    }
+    this.uploadTrail();
+    this.orient();
+    return null;
+  }
+
+  // Remembers the closest pass by a living enemy's body axis, to tell the player how close a miss was.
+  trackNearMiss(line) {
+    for (const enemy of enemies) {
+      if (!enemy.alive) continue;
+      const base = enemy.group.position;
+      if (base.distanceToSquared(line.start) > 25 && base.distanceToSquared(line.end) > 25) continue;
+      line.closestPointToPoint(bodyCenter.copy(base).setY(base.y + BODY_TOP / 2), true, passPoint);
+      axisPoint.set(base.x, THREE.MathUtils.clamp(passPoint.y, base.y, base.y + BODY_TOP), base.z);
+      const distance = passPoint.distanceTo(axisPoint);
+      if (distance < (this.nearMiss?.distance ?? NEAR_MISS_RADIUS)) {
+        this.nearMiss = { distance, offset: passPoint.clone().sub(axisPoint) };
+      }
+    }
+  }
+
+  // Returns false once the trail has faded out and the bullet can be dropped.
+  fade(realDt) {
+    if (this.flying) return true;
+    this.trailLife -= realDt;
+    this.trail.material.opacity = Math.max(0, 0.45 * this.trailLife / 1.5);
+    if (this.trailLife > 0) return true;
+    scene.remove(this.mesh, this.trail);
+    this.trail.geometry.dispose();
+    this.trail.material.dispose();
+    return false;
+  }
+}
+
+class Burst {
+  constructor(point, direction, color, count, speed, size) {
+    this.life = this.maxLife = 1.4;
+    this.positions = new Float32Array(count * 3);
+    this.velocities = [];
+    for (let i = 0; i < count; i++) {
+      point.toArray(this.positions, i * 3);
+      this.velocities.push(direction.clone().multiplyScalar(speed * Math.random())
+        .add(new THREE.Vector3(rand(-1, 1), rand(-0.3, 1), rand(-1, 1)).multiplyScalar(speed * 0.5)));
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.points = new THREE.Points(geometry, new THREE.PointsMaterial({ color, size, transparent: true, depthWrite: false }));
+    scene.add(this.points);
+  }
+
+  update(dt) {
+    this.life -= dt;
+    this.velocities.forEach((v, i) => {
+      v.y -= GRAVITY * dt;
+      this.positions[i * 3] += v.x * dt;
+      this.positions[i * 3 + 1] = Math.max(0.02, this.positions[i * 3 + 1] + v.y * dt);
+      this.positions[i * 3 + 2] += v.z * dt;
+    });
+    this.points.geometry.attributes.position.needsUpdate = true;
+    this.points.material.opacity = Math.max(0, this.life / this.maxLife);
+    if (this.life > 0) return true;
+    scene.remove(this.points);
+    this.points.geometry.dispose();
+    this.points.material.dispose();
+    return false;
+  }
+}
+
+// ---------- audio ----------
+let audioContext = null;
+function playNoise(decaySeconds, filterType, frequency, volume) {
+  audioContext ??= new AudioContext();
+  const rate = audioContext.sampleRate;
+  const length = Math.floor(rate * decaySeconds * 8);
+  const buffer = audioContext.createBuffer(1, length, rate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (rate * decaySeconds));
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  const filter = audioContext.createBiquadFilter();
+  filter.type = filterType;
+  filter.frequency.value = frequency;
+  const gain = audioContext.createGain();
+  gain.gain.value = volume;
+  source.connect(filter).connect(gain).connect(audioContext.destination);
+  source.start();
+}
+
+function playTone(frequency, seconds, volume) {
+  audioContext ??= new AudioContext();
+  const oscillator = audioContext.createOscillator();
+  oscillator.frequency.value = frequency;
+  const gain = audioContext.createGain();
+  gain.gain.setValueAtTime(volume, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + seconds);
+  oscillator.connect(gain).connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + seconds);
+}
+
+const playShot = () => playNoise(0.09, 'lowpass', 1600, 0.7);
+function playImpact(headshot) {
+  if (!headshot) return playNoise(0.05, 'lowpass', 350, 0.9);
+  playNoise(0.02, 'highpass', 2500, 0.5);
+  playTone(1400, 0.25, 0.15);
+}
+
+// ---------- game state ----------
+const state = {
+  mode: 'menu', // menu | play | killcam | aftermath | end
+  paused: false,
+  scoped: false,
+  zoom: 8,
+  yaw: 0,
+  pitch: -0.02,
+  recoil: 0,
+  swayTime: 0,
+  breath: 1,
+  breathless: false,
+  holdingBreath: false,
+  focus: 1,
+  focusing: false,
+  mag: MAG_SIZE,
+  reserve: TOTAL_AMMO - MAG_SIZE,
+  boltTimer: 0,
+  reloadTimer: 0,
+  shots: 0,
+  kills: 0,
+  headshots: 0,
+  score: 0,
+  streak: 0,
+  bestStreak: 0,
+  shake: 0,
+  wind: rand(-4, 4),
+  camBullet: null,
+  camFlight: 1,
+  camScale: 1,
+  camTimer: 0,
+  camSpin: 0,
+  impact: null,
+  impactDirection: null,
+  range: 0,
+  startedAt: 0,
+};
+const bullets = [];
+let effects = [];
+
+const $ = (id) => document.getElementById(id);
+const hud = $('hud'), scopeEl = $('scope'), dotEl = $('dot'), menuEl = $('menu'), msgEl = $('msg');
+let msgTimer = 0;
+const domCache = new Map();
+function setStyle(el, prop, value) {
+  const key = (el.id || el.parentElement.id) + prop;
+  if (domCache.get(key) === value) return;
+  domCache.set(key, value);
+  el.style[prop] = value;
+}
+function showMessage(text) {
+  msgEl.textContent = text;
+  msgEl.style.opacity = 1;
+  msgTimer = 2;
+}
+
+const scorePopEl = $('scorePop'), hitmarkerEl = $('hitmarker');
+let scorePopTimer = 0, hitmarkerTimer = 0;
+function showScore(lines, multiplier, total) {
+  scorePopEl.innerHTML = lines.map(([label, points]) => `${label} +${points}`).join('<br>') +
+    (multiplier > 1 ? `<br>Sequência ×${multiplier}` : '') + `<b>+${total}</b>`;
+  scorePopEl.style.opacity = 1;
+  scorePopTimer = 3;
+}
+
+function flashHitmarker(headshot) {
+  hitmarkerEl.classList.toggle('head', headshot);
+  hitmarkerEl.style.opacity = 1;
+  hitmarkerTimer = 0.4;
+}
+
+function fadeOverlays(realDt) {
+  if (msgTimer > 0 && (msgTimer -= realDt) <= 0) msgEl.style.opacity = 0;
+  if (scorePopTimer > 0 && (scorePopTimer -= realDt) <= 0) scorePopEl.style.opacity = 0;
+  if (hitmarkerTimer > 0 && (hitmarkerTimer -= realDt) <= 0) hitmarkerEl.style.opacity = 0;
+}
+
+const scopeRadius = () => Math.min(innerWidth, innerHeight) * 0.46;
+function buildScope() {
+  const w = innerWidth, h = innerHeight, cx = w / 2, cy = h / 2, r = scopeRadius();
+  const pxPerMil = (h / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * 0.001;
+  let svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<path fill="#000" fill-rule="evenodd" d="M0 0H${w}V${h}H0Z M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z"/>`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#000" stroke-width="18" opacity=".6"/>`;
+  svg += `<g stroke="#000" stroke-width="1.2">`;
+  svg += `<line x1="${cx - r}" y1="${cy}" x2="${cx + r}" y2="${cy}"/><line x1="${cx}" y1="${cy - r}" x2="${cx}" y2="${cy + r}"/>`;
+  svg += `</g><g stroke="#000" stroke-width="5">`;
+  const gap = r * 0.45;
+  svg += `<line x1="${cx - r}" y1="${cy}" x2="${cx - gap}" y2="${cy}"/><line x1="${cx + gap}" y1="${cy}" x2="${cx + r}" y2="${cy}"/>`;
+  svg += `<line x1="${cx}" y1="${cy + gap}" x2="${cx}" y2="${cy + r}"/><line x1="${cx}" y1="${cy - r}" x2="${cx}" y2="${cy - gap}"/>`;
+  svg += `</g><g stroke="#000" stroke-width="1.2" font-size="10" fill="#000">`;
+  for (let mil = 1; mil * pxPerMil < gap; mil++) {
+    const d = mil * pxPerMil, t = mil % 5 === 0 ? 7 : 4;
+    svg += `<line x1="${cx - d}" y1="${cy - t}" x2="${cx - d}" y2="${cy + t}"/><line x1="${cx + d}" y1="${cy - t}" x2="${cx + d}" y2="${cy + t}"/>`;
+    svg += `<line x1="${cx - t}" y1="${cy + d}" x2="${cx + t}" y2="${cy + d}"/><line x1="${cx - t}" y1="${cy - d}" x2="${cx + t}" y2="${cy - d}"/>`;
+    if (mil % 5 === 0) svg += `<text x="${cx + 10}" y="${cy + d + 4}" stroke="none">${mil}</text>`;
+  }
+  svg += `</g></svg>`;
+  scopeEl.innerHTML = svg;
+}
+
+function applyFov(fov) {
+  if (camera.fov === fov) return;
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+  if (state.scoped) buildScope();
+}
+
+// ---------- actions ----------
+function fire() {
+  if (state.boltTimer > 0 || state.reloadTimer > 0 || state.mag <= 0) return;
+  state.mag--;
+  state.shots++;
+  state.boltTimer = BOLT_TIME;
+  const direction = camera.getWorldDirection(new THREE.Vector3());
+  const velocity = direction.multiplyScalar(BULLET_SPEED);
+  const acc = new THREE.Vector3(state.wind * WIND_FACTOR, -GRAVITY, 0);
+  const prediction = predictShot(camera.position, velocity, acc);
+  const bullet = new Bullet(camera.position, velocity, acc);
+  bullet.shotWind = state.wind;
+  bullet.steadyAim = isAimSteady();
+  bullets.push(bullet);
+  if (prediction?.hit.object.userData.enemy?.alive) {
+    state.mode = 'killcam';
+    state.camBullet = bullet;
+    state.camFlight = prediction.time;
+    state.camScale = prediction.time / KILLCAM_SECONDS;
+    state.camSpin = 0;
+  }
+  state.recoil = 0.05;
+  playShot();
+}
+
+function reload() {
+  if (state.reloadTimer > 0 || state.mag === MAG_SIZE || state.reserve === 0) return;
+  state.reloadTimer = RELOAD_TIME;
+}
+
+function alarmNear(point, radius) {
+  for (const enemy of enemies) if (enemy.group.position.distanceTo(point) < radius) enemy.alarm();
+}
+
+function onBulletHit(bullet, hit) {
+  const direction = bullet.vel.clone().normalize();
+  const enemy = hit.object.userData.enemy;
+  if (enemy) {
+    const headshot = hit.object.userData.part === 'head';
+    effects.push(new Burst(hit.point, direction, 0x8a0a0a, headshot ? 90 : 50, 3, 0.05));
+    if (enemy.alive) {
+      const meters = Math.round(bullet.origin.distanceTo(hit.point));
+      scoreKill(bullet, enemy, headshot, meters);
+      enemy.kill(direction);
+      state.kills++;
+      if (headshot) state.headshots++;
+      showMessage(`${headshot ? 'TIRO NA CABEÇA' : 'ABATIDO'} · ${meters} m`);
+      flashHitmarker(headshot);
+      playImpact(headshot);
+      state.shake = headshot ? 1 : 0.6;
+      alarmNear(hit.point, 50);
+    } else {
+      registerMiss(bullet);
+    }
+  } else {
+    effects.push(new Burst(hit.point, direction.clone().negate().add(UP), 0xb8a888, 40, 3, 0.3));
+    alarmNear(hit.point, 30);
+    registerMiss(bullet);
+  }
+  if (bullet === state.camBullet) {
+    state.mode = 'aftermath';
+    state.camTimer = AFTERMATH_SECONDS;
+    state.impact = hit.point.clone();
+    state.impactDirection = direction;
+  }
+}
+
+function scoreKill(bullet, enemy, headshot, meters) {
+  const lines = [['Abate', SCORE.kill]];
+  if (headshot) lines.push(['Na cabeça', SCORE.headshot]);
+  if (meters > LONG_SHOT_FROM) lines.push([`Distância ${meters} m`, Math.round((meters - LONG_SHOT_FROM) / 2)]);
+  if (enemy.running) lines.push(['Alvo correndo', SCORE.running]);
+  if (Math.abs(bullet.shotWind) >= STRONG_WIND) lines.push(['Vento forte', SCORE.strongWind]);
+  if (bullet.steadyAim) lines.push(['Respiração presa', SCORE.steadyAim]);
+  state.streak++;
+  state.bestStreak = Math.max(state.bestStreak, state.streak);
+  const multiplier = Math.min(state.streak, MAX_MULTIPLIER);
+  const total = lines.reduce((sum, [, points]) => sum + points, 0) * multiplier;
+  state.score += total;
+  showScore(lines, multiplier, total);
+}
+
+function describeNearMiss(nearMiss, direction) {
+  const lateral = nearMiss.offset.dot(new THREE.Vector3().crossVectors(direction, UP).normalize());
+  const vertical = nearMiss.offset.y;
+  const passedOver = Math.abs(vertical) > Math.abs(lateral);
+  const where = passedOver ? (vertical > 0 ? 'acima' : 'abaixo') : (lateral > 0 ? 'à direita' : 'à esquerda');
+  const gap = Math.max(0.05, nearMiss.distance - (passedOver ? 0 : BODY_HALF_WIDTH));
+  return `QUASE · ${gap.toFixed(2).replace('.', ',')} m ${where}`;
+}
+
+function registerMiss(bullet) {
+  const parts = [];
+  if (bullet.nearMiss) parts.push(describeNearMiss(bullet.nearMiss, bullet.vel.clone().normalize()));
+  if (state.streak >= 2) parts.push('SEQUÊNCIA PERDIDA');
+  state.streak = 0;
+  if (parts.length) showMessage(parts.join(' · '));
+}
+
+function leaveCam() {
+  state.mode = 'play';
+  state.camBullet = null;
+}
+
+function endGame(won) {
+  state.mode = 'end';
+  document.exitPointerLock?.();
+  const seconds = Math.round((performance.now() - state.startedAt) / 1000);
+  const accuracy = state.shots ? Math.round((100 * state.kills) / state.shots) : 0;
+  $('menuText').textContent = `${won ? 'Missão cumprida!' : 'Sem munição.'} Abates: ${state.kills}/${enemies.length} · ` +
+    `Na cabeça: ${state.headshots} · Precisão: ${accuracy}% · Tempo: ${seconds}s · ` +
+    `Pontos: ${state.score} · Melhor sequência: ${state.bestStreak}`;
+  $('startBtn').textContent = 'Jogar de novo';
+  menuEl.style.display = 'flex';
+}
+
+// ---------- input ----------
+$('startBtn').addEventListener('click', () => {
+  if (state.mode === 'end') return location.reload();
+  if (state.mode === 'menu') {
+    state.mode = 'play';
+    state.startedAt = performance.now();
+  }
+  state.paused = false;
+  menuEl.style.display = 'none';
+  hud.style.display = 'block';
+  renderer.domElement.requestPointerLock()?.catch?.(() => {});
+});
+
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement || state.mode === 'menu' || state.mode === 'end') return;
+  state.paused = true;
+  $('menuText').textContent = 'Pausado.';
+  $('startBtn').textContent = 'Continuar';
+  menuEl.style.display = 'flex';
+});
+
+addEventListener('contextmenu', (e) => e.preventDefault());
+renderer.domElement.addEventListener('mousedown', (e) => {
+  if (state.paused) return;
+  if (state.mode === 'killcam' || state.mode === 'aftermath') return leaveCam();
+  if (state.mode !== 'play') return;
+  if (e.button === 0) fire();
+  if (e.button === 2) {
+    state.scoped = !state.scoped;
+    if (state.scoped) buildScope();
+  }
+});
+
+addEventListener('mousemove', (e) => {
+  if (state.mode !== 'play' || state.paused || !document.pointerLockElement) return;
+  const sensitivity = 0.0022 * (camera.fov / BASE_FOV);
+  state.yaw -= e.movementX * sensitivity;
+  state.pitch = THREE.MathUtils.clamp(state.pitch - e.movementY * sensitivity, -1.4, 1.4);
+});
+
+addEventListener('wheel', (e) => {
+  if (!state.scoped) return;
+  state.zoom = THREE.MathUtils.clamp(state.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 3, 24);
+});
+
+const HOLD_KEYS = { ShiftLeft: 'holdingBreath', ShiftRight: 'holdingBreath', Space: 'focusing' };
+addEventListener('keydown', (e) => {
+  if (e.code in HOLD_KEYS) {
+    state[HOLD_KEYS[e.code]] = true;
+    e.preventDefault();
+  }
+  if (e.code === 'KeyR' && state.mode === 'play') reload();
+});
+addEventListener('keyup', (e) => {
+  if (e.code in HOLD_KEYS) state[HOLD_KEYS[e.code]] = false;
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  if (state.scoped) buildScope();
+});
+
+// ---------- loop ----------
+function timeScale() {
+  if (state.mode === 'killcam') {
+    const nearImpact = state.camFlight - state.camBullet.age < state.camFlight * 0.15;
+    return state.camScale * (nearImpact ? 0.25 : 1);
+  }
+  if (state.mode === 'aftermath') return 0.35;
+  return state.focusing && state.focus > 0 ? 0.25 : 1;
+}
+
+const isAimSteady = () => state.scoped && state.holdingBreath && !state.breathless && state.breath > 0;
+
+function updatePlayer(realDt, dt) {
+  state.boltTimer = Math.max(0, state.boltTimer - realDt);
+  if (state.reloadTimer > 0) {
+    state.reloadTimer -= realDt;
+    if (state.reloadTimer <= 0) {
+      state.reloadTimer = 0;
+      const loaded = Math.min(MAG_SIZE - state.mag, state.reserve);
+      state.mag += loaded;
+      state.reserve -= loaded;
+    }
+  } else if (state.mag === 0 && state.boltTimer === 0) {
+    reload();
+  }
+
+  const holding = isAimSteady();
+  state.breath = THREE.MathUtils.clamp(state.breath + (holding ? -0.25 : 0.2) * realDt, 0, 1);
+  if (state.breath === 0) state.breathless = true;
+  if (state.breathless && state.breath > 0.5) state.breathless = false;
+
+  const focusing = state.focusing && state.focus > 0;
+  state.focus = THREE.MathUtils.clamp(state.focus + (focusing ? -0.25 : 0.08) * realDt, 0, 1);
+
+  state.wind = THREE.MathUtils.clamp(state.wind + rand(-1, 1) * 0.6 * realDt, -5, 5);
+  state.recoil *= Math.exp(-realDt * 6);
+  state.swayTime += dt;
+
+  let sway = 0;
+  if (state.scoped) sway = holding ? 0.00015 : state.breathless ? 0.003 : 0.0012;
+  const t = state.swayTime;
+  camera.position.copy(EYE);
+  camera.rotation.set(
+    state.pitch + state.recoil + Math.cos(t * 1.3) * sway * 0.8,
+    state.yaw + (Math.sin(t * 0.9) + 0.4 * Math.sin(t * 2.1)) * sway,
+    0,
+  );
+  applyFov(state.scoped ? BASE_FOV / state.zoom : BASE_FOV);
+}
+
+const side = new THREE.Vector3();
+function updateCinematicCamera(realDt) {
+  state.camSpin += realDt;
+  if (state.mode === 'killcam') {
+    const bullet = state.camBullet;
+    const direction = bullet.vel.clone().normalize();
+    side.crossVectors(direction, UP).normalize();
+    const orbit = side.clone().multiplyScalar(Math.cos(state.camSpin * 0.8) * 0.12)
+      .addScaledVector(UP, 0.05 + Math.sin(state.camSpin * 0.8) * 0.06);
+    camera.position.copy(bullet.pos).addScaledVector(direction, -0.35).add(orbit);
+    camera.lookAt(bullet.pos.clone().addScaledVector(direction, 0.4));
+    applyFov(40);
+  } else {
+    state.camTimer -= realDt;
+    const angle = state.camSpin * 0.35;
+    const back = state.impactDirection.clone().setY(0).normalize().multiplyScalar(-4)
+      .applyAxisAngle(UP, angle);
+    camera.position.copy(state.impact).add(back).setY(state.impact.y + 1.2);
+    camera.lookAt(state.impact);
+    applyFov(45);
+    if (state.camTimer <= 0) leaveCam();
+  }
+}
+
+const RANGE_INTERVAL = 0.1;
+const aimDirection = new THREE.Vector3();
+let rangeTimer = 0, rangeText = '---';
+const windArrow = (w) => (w > 0.2 ? '→' : w < -0.2 ? '←' : '·');
+function updateHud(realDt) {
+  const inCam = state.mode === 'killcam' || state.mode === 'aftermath';
+  setStyle(scopeEl, 'display', state.scoped && !inCam ? 'block' : 'none');
+  setStyle(dotEl, 'display', !state.scoped && !inCam ? 'block' : 'none');
+  setStyle($('camLabel'), 'display', inCam ? 'block' : 'none');
+  setStyle($('stats'), 'display', inCam ? 'none' : 'block');
+  fadeOverlays(realDt);
+  if (inCam) return;
+
+  if ((rangeTimer -= realDt) <= 0) {
+    rangeTimer = RANGE_INTERVAL;
+    const hit = raycastWorld(camera.position, camera.getWorldDirection(aimDirection), 4000);
+    rangeText = hit ? `${Math.round(hit.distance)} m` : '---';
+  }
+  const alive = enemies.filter((e) => e.alive).length;
+  const status = state.reloadTimer > 0 ? ' (recarregando)' : state.boltTimer > 0 ? ' (ferrolho)' : '';
+  const statsHtml =
+    `Pontos ${state.score} · Sequência ${state.streak} (×${Math.max(1, Math.min(state.streak, MAX_MULTIPLIER))})<br>` +
+    `Munição ${state.mag}/${MAG_SIZE} +${state.reserve}${status}<br>` +
+    `Alvos restantes ${alive}/${enemies.length}<br>` +
+    `Vento ${windArrow(state.wind)} ${Math.abs(state.wind).toFixed(1)} m/s<br>` +
+    `Distância ${rangeText} · Zoom ${state.scoped ? state.zoom.toFixed(1) + 'x' : '1x'}`;
+  if (domCache.get('stats') !== statsHtml) {
+    domCache.set('stats', statsHtml);
+    $('statsText').innerHTML = statsHtml;
+  }
+  setStyle($('breathBar').firstElementChild, 'width', `${Math.round(state.breath * 100)}%`);
+  setStyle($('focusBar').firstElementChild, 'width', `${Math.round(state.focus * 100)}%`);
+}
+
+function applyShake(realDt) {
+  if (state.shake < 0.01) return;
+  const angle = state.shake * SHAKE_ANGLE * (camera.fov / BASE_FOV);
+  camera.rotation.x += rand(-angle, angle);
+  camera.rotation.y += rand(-angle, angle);
+  state.shake *= Math.exp(-realDt * 6);
+}
+
+let lastTime = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const realDt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+  if (state.mode === 'menu' || state.paused) {
+    if (state.mode === 'menu') {
+      camera.position.copy(EYE);
+      camera.rotation.set(state.pitch, state.yaw + Math.sin(now / 4000) * 0.3, 0);
+      render();
+    }
+    return; // paused: the last frame stays on the canvas, nothing to redraw
+  }
+
+  const dt = realDt * timeScale();
+  for (const enemy of enemies) enemy.update(dt);
+  for (const bullet of bullets) {
+    if (!bullet.flying) continue;
+    const hit = bullet.fly(dt);
+    if (hit) onBulletHit(bullet, hit);
+    else if (!bullet.flying) registerMiss(bullet); // flew out of range
+  }
+  if (state.mode === 'killcam' && !state.camBullet.flying) leaveCam(); // flew out of range
+  for (let i = bullets.length - 1; i >= 0; i--) if (!bullets[i].fade(realDt)) bullets.splice(i, 1);
+  effects = effects.filter((effect) => effect.update(dt));
+
+  if (state.mode === 'play' || state.mode === 'end') updatePlayer(realDt, dt);
+  else updateCinematicCamera(realDt);
+  applyShake(realDt);
+  updateHud(realDt);
+
+  if (state.mode === 'play') {
+    if (enemies.every((e) => !e.alive)) endGame(true);
+    else if (state.mag === 0 && state.reserve === 0 && state.reloadTimer === 0 && !bullets.some((b) => b.flying)) endGame(false);
+  }
+  render();
+}
+
+// Scoped view: everything outside the lens is covered by the opaque overlay, so only shade the lens square.
+function render() {
+  const scopeVisible = state.scoped && state.mode === 'play';
+  renderer.setScissorTest(scopeVisible);
+  if (scopeVisible) {
+    const r = scopeRadius();
+    renderer.setScissor(innerWidth / 2 - r, innerHeight / 2 - r, 2 * r, 2 * r);
+  }
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
