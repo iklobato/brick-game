@@ -2,11 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>Slow Bullet</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; color: #eee; }
-  canvas { display: block; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; color: #eee;
+    overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; touch-action: none; }
   #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
   #scope { position: absolute; inset: 0; display: none; }
   #scope svg { width: 100%; height: 100%; display: block; }
@@ -24,19 +25,43 @@
   #hitmarker::after { transform: rotate(-45deg); }
   #hitmarker.head::before, #hitmarker.head::after { background: #ff3b30; }
   #camLabel { position: absolute; top: 16px; width: 100%; text-align: center; font-size: 13px; letter-spacing: 3px; opacity: .8; display: none; }
+  #touch { position: absolute; inset: 0; display: none; }
+  #touch button { position: absolute; pointer-events: auto; touch-action: none; font: inherit; font-weight: 700; color: #fff;
+    background: rgba(20, 24, 28, .45); border: 2px solid rgba(255, 255, 255, .55); border-radius: 50%; }
+  #touch button.on { background: rgba(200, 160, 64, .7); }
+  #btnFire { right: calc(20px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 92px; height: 92px; font-size: 16px; background: rgba(160, 30, 30, .55); }
+  #btnScope { right: calc(122px + env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); width: 70px; height: 70px; font-size: 12px; }
+  #btnReload { right: calc(40px + env(safe-area-inset-right)); bottom: calc(126px + env(safe-area-inset-bottom)); width: 52px; height: 52px; font-size: 15px; }
+  #btnBreath { left: calc(20px + env(safe-area-inset-left)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 80px; height: 80px; font-size: 12px; }
+  #btnFocus { left: calc(112px + env(safe-area-inset-left)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 70px; height: 70px; font-size: 12px; }
+  #btnPause { right: calc(14px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top)); width: 44px; height: 44px; font-size: 14px; }
+  #zoomPad { display: none; }
+  #btnZoomIn { right: calc(20px + env(safe-area-inset-right)); top: calc(38% - 58px); width: 50px; height: 50px; font-size: 24px; }
+  #btnZoomOut { right: calc(20px + env(safe-area-inset-right)); top: 38%; width: 50px; height: 50px; font-size: 24px; }
+  body.touch #stats { bottom: auto; top: calc(8px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); font-size: 12px; line-height: 1.45; }
+  body.touch .bar { width: 110px; height: 5px; }
+  body.touch #msg { font-size: 20px; top: 18%; }
+  body.touch #scorePop { right: auto; left: 50%; transform: translateX(-50%); top: 30%; font-size: 13px; text-align: center; }
+  body.touch #scorePop b { font-size: 22px; }
+  body.touch .desktop-only, body:not(.touch) .touch-only { display: none; }
   #menu { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); }
-  .panel { max-width: 440px; padding: 28px 32px; background: rgba(20,24,28,.92); border: 1px solid #333; border-radius: 8px; }
+  .panel { max-width: 440px; max-height: calc(100% - 24px); overflow-y: auto; box-sizing: border-box; margin: 12px; padding: 28px 32px; background: rgba(20,24,28,.92); border: 1px solid #333; border-radius: 8px; }
   .panel h1 { margin: 0 0 8px; letter-spacing: 6px; }
   .panel ul { padding-left: 18px; line-height: 1.7; font-size: 14px; }
   .panel button { font: inherit; font-size: 16px; padding: 10px 28px; background: #c8a040; color: #111; border: 0; border-radius: 4px; cursor: pointer; }
   .panel button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  @media (max-height: 500px) {
+    .panel { padding: 14px 20px; }
+    .panel h1 { font-size: 22px; }
+    .panel p, .panel ul { font-size: 13px; line-height: 1.5; margin: 6px 0; }
+  }
 </style>
 </head>
 <body>
 <div id="hud">
   <div id="scope"></div>
   <div id="dot"></div>
-  <div id="camLabel">BULLET CAM · clique para pular</div>
+  <div id="camLabel">BULLET CAM · toque ou clique para pular</div>
   <div id="msg"></div>
   <div id="scorePop"></div>
   <div id="hitmarker"></div>
@@ -45,12 +70,31 @@
     Fôlego <div class="bar" id="breathBar"><div></div></div>
     Foco <div class="bar" id="focusBar"><div></div></div>
   </div>
+  <div id="touch">
+    <button id="btnBreath" data-hold="holdingBreath">Respirar</button>
+    <button id="btnFocus" data-hold="focusing">Foco</button>
+    <button id="btnPause" data-tap="pause" aria-label="Pausar">II</button>
+    <button id="btnReload" data-tap="reload" aria-label="Recarregar">R</button>
+    <button id="btnScope" data-tap="scope">Luneta</button>
+    <button id="btnFire" data-tap="fire">Fogo</button>
+    <div id="zoomPad">
+      <button id="btnZoomIn" data-tap="zoomIn" aria-label="Mais zoom">+</button>
+      <button id="btnZoomOut" data-tap="zoomOut" aria-label="Menos zoom">−</button>
+    </div>
+  </div>
 </div>
 <div id="menu">
   <div class="panel">
     <h1>SLOW BULLET</h1>
     <p id="menuText">Elimine todos os alvos. A bala cai com a gravidade e desvia com o vento.</p>
-    <ul>
+    <ul class="touch-only">
+      <li>Arraste o dedo na tela: mirar</li>
+      <li>Fogo: atirar · Luneta: abrir e fechar</li>
+      <li>Pinça ou + e −: zoom da luneta</li>
+      <li>Respirar (segurar): mira firme · Foco (segurar): câmera lenta</li>
+      <li>Melhor com o celular deitado</li>
+    </ul>
+    <ul class="desktop-only">
       <li>Mouse: mirar · Clique esquerdo: atirar</li>
       <li>Clique direito: luneta · Roda: zoom</li>
       <li>Shift (segurar): prender a respiração</li>
@@ -68,6 +112,10 @@
 import * as THREE from 'three';
 
 const BASE_FOV = 70;
+const PORTRAIT_HORIZONTAL_FOV = 60; // keeps a usable field of view when the phone is upright
+const MIN_ZOOM = 3;
+const MAX_ZOOM = 24;
+const TOUCH_AIM_GAIN = 1.2;         // 1 = the view turns exactly as far as the finger moved
 const BULLET_SPEED = 850;
 const GRAVITY = 9.81;
 const WIND_FACTOR = 1.5;          // lateral acceleration per m/s of wind (simplified drift model)
@@ -660,6 +708,13 @@ function buildScope() {
   scopeEl.innerHTML = svg;
 }
 
+// Vertical FOV for the unzoomed view; widened in portrait so the horizontal view does not collapse.
+function baseFov() {
+  if (camera.aspect >= 1) return BASE_FOV;
+  const halfWidth = THREE.MathUtils.degToRad(PORTRAIT_HORIZONTAL_FOV / 2);
+  return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(halfWidth) / camera.aspect));
+}
+
 function applyFov(fov) {
   if (camera.fov === fov) return;
   camera.fov = fov;
@@ -690,6 +745,7 @@ function fire() {
   }
   state.recoil = 0.05;
   playShot();
+  vibrate(30);
 }
 
 function reload() {
@@ -717,6 +773,7 @@ function onBulletHit(bullet, hit) {
       flashHitmarker(headshot);
       playImpact(headshot);
       state.shake = headshot ? 1 : 0.6;
+      vibrate(headshot ? [40, 30, 80] : [40, 30, 40]);
       alarmNear(hit.point, 50);
     } else {
       registerMiss(bullet);
@@ -784,6 +841,27 @@ function endGame(won) {
 }
 
 // ---------- input ----------
+const canvas = renderer.domElement;
+const isTouchUi = () => document.body.classList.contains('touch');
+const enableTouchUi = () => document.body.classList.add('touch');
+if (matchMedia('(pointer: coarse)').matches) enableTouchUi();
+
+const vibrate = (pattern) => navigator.vibrate?.(pattern);
+const inCinematic = () => state.mode === 'killcam' || state.mode === 'aftermath';
+
+// Mobile browsers only allow audio, fullscreen and orientation lock from inside a user gesture.
+function unlockAudio() {
+  audioContext ??= new AudioContext();
+  audioContext.resume();
+}
+
+function enterFullscreenLandscape() {
+  if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation?.lock?.('landscape'))
+    .catch(() => {}); // iPhone Safari has no element fullscreen; the game still runs in the page
+}
+
 $('startBtn').addEventListener('click', () => {
   if (state.mode === 'end') return location.reload();
   if (state.mode === 'menu') {
@@ -793,28 +871,120 @@ $('startBtn').addEventListener('click', () => {
   state.paused = false;
   menuEl.style.display = 'none';
   hud.style.display = 'block';
-  renderer.domElement.requestPointerLock()?.catch?.(() => {});
+  unlockAudio();
+  if (isTouchUi()) enterFullscreenLandscape();
+  else canvas.requestPointerLock()?.catch?.(() => {});
 });
 
-document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement || state.mode === 'menu' || state.mode === 'end') return;
+function pause() {
+  if (state.paused || state.mode === 'menu' || state.mode === 'end') return;
   state.paused = true;
+  state.holdingBreath = false;
+  state.focusing = false;
+  touchPoints.clear();
+  document.querySelectorAll('#touch .on').forEach((button) => button.classList.remove('on'));
   $('menuText').textContent = 'Pausado.';
   $('startBtn').textContent = 'Continuar';
   menuEl.style.display = 'flex';
+}
+
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement && !isTouchUi()) pause();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pause();
 });
 
+function primaryAction() {
+  if (inCinematic()) return leaveCam();
+  if (state.mode === 'play') fire();
+}
+
+function toggleScope() {
+  state.scoped = !state.scoped;
+  if (state.scoped) buildScope();
+}
+
+const setZoom = (zoom) => (state.zoom = THREE.MathUtils.clamp(zoom, MIN_ZOOM, MAX_ZOOM));
+
 addEventListener('contextmenu', (e) => e.preventDefault());
-renderer.domElement.addEventListener('mousedown', (e) => {
+
+// Touch: one finger on the scene aims, two fingers pinch the scope zoom, a tap during the bullet cam skips it.
+const touchPoints = new Map();
+let pinchDistance = 0;
+const measurePinch = () => {
+  const [a, b] = [...touchPoints.values()];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+};
+
+canvas.addEventListener('pointerdown', (e) => {
   if (state.paused) return;
-  if (state.mode === 'killcam' || state.mode === 'aftermath') return leaveCam();
+  if (e.pointerType === 'mouse') {
+    if (e.button === 0) primaryAction();
+    if (e.button === 2 && state.mode === 'play') toggleScope();
+    return;
+  }
+  enableTouchUi();
+  e.preventDefault();
+  if (inCinematic()) return leaveCam();
   if (state.mode !== 'play') return;
-  if (e.button === 0) fire();
-  if (e.button === 2) {
-    state.scoped = !state.scoped;
-    if (state.scoped) buildScope();
+  canvas.setPointerCapture(e.pointerId);
+  touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  pinchDistance = touchPoints.size === 2 ? measurePinch() : 0;
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  const last = touchPoints.get(e.pointerId);
+  if (!last || state.mode !== 'play' || state.paused) return;
+  const dx = e.clientX - last.x, dy = e.clientY - last.y;
+  last.x = e.clientX;
+  last.y = e.clientY;
+  if (touchPoints.size === 1) {
+    const radiansPerPixel = (THREE.MathUtils.degToRad(camera.fov) / innerHeight) * TOUCH_AIM_GAIN;
+    state.yaw -= dx * radiansPerPixel;
+    state.pitch = THREE.MathUtils.clamp(state.pitch - dy * radiansPerPixel, -1.4, 1.4);
+  } else if (touchPoints.size === 2 && state.scoped) {
+    const distance = measurePinch();
+    if (pinchDistance > 0) setZoom(state.zoom * (distance / pinchDistance));
+    pinchDistance = distance;
   }
 });
+
+const releaseTouch = (e) => {
+  touchPoints.delete(e.pointerId);
+  pinchDistance = touchPoints.size === 2 ? measurePinch() : 0;
+};
+canvas.addEventListener('pointerup', releaseTouch);
+canvas.addEventListener('pointercancel', releaseTouch);
+
+const ZOOM_STEP = 1.3;
+const TAP_ACTIONS = {
+  fire: primaryAction,
+  scope: toggleScope,
+  reload,
+  pause,
+  zoomIn: () => setZoom(state.zoom * ZOOM_STEP),
+  zoomOut: () => setZoom(state.zoom / ZOOM_STEP),
+};
+for (const button of document.querySelectorAll('#touch [data-tap]')) {
+  const action = button.dataset.tap;
+  button.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (state.paused || (action !== 'fire' && state.mode !== 'play')) return;
+    TAP_ACTIONS[action]();
+  });
+}
+for (const button of document.querySelectorAll('#touch [data-hold]')) {
+  const flag = button.dataset.hold;
+  const hold = (held) => (e) => {
+    e.preventDefault();
+    if (state.paused && held) return;
+    state[flag] = held;
+    button.classList.toggle('on', held);
+  };
+  button.addEventListener('pointerdown', hold(true));
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) button.addEventListener(type, hold(false));
+}
 
 addEventListener('mousemove', (e) => {
   if (state.mode !== 'play' || state.paused || !document.pointerLockElement) return;
@@ -824,8 +994,7 @@ addEventListener('mousemove', (e) => {
 });
 
 addEventListener('wheel', (e) => {
-  if (!state.scoped) return;
-  state.zoom = THREE.MathUtils.clamp(state.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 3, 24);
+  if (state.scoped) setZoom(state.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
 });
 
 const HOLD_KEYS = { ShiftLeft: 'holdingBreath', ShiftRight: 'holdingBreath', Space: 'focusing' };
@@ -840,12 +1009,15 @@ addEventListener('keyup', (e) => {
   if (e.code in HOLD_KEYS) state[HOLD_KEYS[e.code]] = false;
 });
 
-addEventListener('resize', () => {
+function fitViewport() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  if (!state.scoped) applyFov(baseFov());
   if (state.scoped) buildScope();
-});
+}
+addEventListener('resize', fitViewport);
+fitViewport();
 
 // ---------- loop ----------
 function timeScale() {
@@ -894,7 +1066,7 @@ function updatePlayer(realDt, dt) {
     state.yaw + (Math.sin(t * 0.9) + 0.4 * Math.sin(t * 2.1)) * sway,
     0,
   );
-  applyFov(state.scoped ? BASE_FOV / state.zoom : BASE_FOV);
+  applyFov(state.scoped ? baseFov() / state.zoom : baseFov());
 }
 
 const side = new THREE.Vector3();
@@ -931,6 +1103,9 @@ function updateHud(realDt) {
   setStyle(dotEl, 'display', !state.scoped && !inCam ? 'block' : 'none');
   setStyle($('camLabel'), 'display', inCam ? 'block' : 'none');
   setStyle($('stats'), 'display', inCam ? 'none' : 'block');
+  setStyle($('touch'), 'display', isTouchUi() && !inCam ? 'block' : 'none');
+  setStyle($('zoomPad'), 'display', state.scoped ? 'block' : 'none');
+  $('btnScope').classList.toggle('on', state.scoped);
   fadeOverlays(realDt);
   if (inCam) return;
 
